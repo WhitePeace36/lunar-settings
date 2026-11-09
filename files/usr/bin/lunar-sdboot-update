@@ -10,7 +10,8 @@
 # linux-lunar is the default entry; another kernel only if it is missing.
 #
 # Runs from a pacman hook after kernel installs, upgrades and removals.
-# Does nothing on systems that don't boot with systemd-boot.
+# Does nothing on systems that don't boot with systemd-boot or aren't Lunar
+# installs (no /etc/lunar/cmdline-root).
 
 set -euo pipefail
 
@@ -19,6 +20,9 @@ DEFAULT_KERNEL=linux-lunar
 
 log() { echo "==> lunar-sdboot: $*"; }
 
+# Only on Lunar installs (lunar-update-cmdline needs the same file), so the
+# package never touches the boot setup of another distribution.
+[[ -s /etc/lunar/cmdline-root ]] || exit 0
 command -v bootctl >/dev/null || exit 0
 bootctl is-installed >/dev/null 2>&1 || exit 0
 esp="$(bootctl --print-esp-path 2>/dev/null)" || exit 0

@@ -1,6 +1,6 @@
 # lunar-settings
 
-System settings of [Lunar](https://github.com/WhitePeace36/lunar) (KDE Plasma
+System settings of [Lunar](https://github.com/WhitePeace36/LunarOs) (KDE Plasma
 on Arch Linux with the linux-lunar kernel), as one package.
 
 `files/` mirrors the filesystem of the installed system:
@@ -39,15 +39,23 @@ laptop this costs battery life.
 makepkg -si
 ```
 
-Outside Lunar, `lunar-settings` needs the other Lunar packages it depends on
-(`ananicy-cpp-lunar`, `lunar-ananicy-rules`, `elara`) from the `[lunar]` repo.
+All dependencies come from Arch's repos. The Lunar packages these settings
+are made for (`ananicy-cpp-lunar`, `lunar-ananicy-rules`, `elara`) are
+optional dependencies; the Lunar installer installs them.
+
+On a system that wasn't installed with Lunar's installer (no
+`/etc/lunar/cmdline-root`), the kernel parameters and systemd-boot tools do
+nothing, so the boot setup of another distribution is never touched. The
+other settings (sysctl, tmpfiles, udev, ...) do apply. Packages of the other
+distribution may ship files at the same paths (for example
+`/usr/lib/systemd/zram-generator.conf`); pacman then refuses to install.
 
 ## Releasing a change
 
 1. Edit the file(s). A new file just goes into `files/` at its final path.
-2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.0 -> 2.1.0), or `pkgrel` for a
+2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.1 -> 2.1.0), or `pkgrel` for a
    small fix. Commit and push.
-3. In the `lunar` repo: set `_commit` in `packages/lunar-settings/prepare.sh`
+3. In the `LunarOs` repo: set `_commit` in `packages/lunar-settings/prepare.sh`
    to the new commit, then `scripts/build-packages.sh lunar-settings` and
    `scripts/publish.sh`.
 

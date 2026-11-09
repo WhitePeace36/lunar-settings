@@ -2,3 +2,6 @@
 /src/
 /pkg/
 *.pkg.tar.*
+
+# patches applied with git am
+*.patch

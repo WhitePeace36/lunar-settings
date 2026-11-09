@@ -45,7 +45,7 @@ collect_params() {
     for f in "$ETC_DIR"/*.conf; do files["${f##*/}"]="$f"; done
     shopt -u nullglob
     while read -r name; do
-        [[ -n "$name" ]] && words_of "${files[$name]}"
+        if [[ -n "$name" ]]; then words_of "${files[$name]}"; fi
     done < <(printf '%s\n' "${!files[@]}" | sort)
 }
 
@@ -61,10 +61,12 @@ fi
 
 [[ "$(id -u)" -eq 0 ]] || { echo "lunar-update-cmdline: must be run as root" >&2; exit 1; }
 
+# Only Lunar installs have it (the installer writes it). Elsewhere, and while
+# the installer is still installing packages, the boot setup is left alone.
 if [[ ! -s "$ROOT_FILE" ]]; then
-    echo "lunar-update-cmdline: $ROOT_FILE is missing; it should hold the root= options" >&2
-    echo "  of this machine (the installer writes it). Not changing $OUT." >&2
-    exit 1
+    echo "lunar-update-cmdline: no $ROOT_FILE (not a Lunar install, or not set up yet)," >&2
+    echo "  leaving $OUT and the boot entries alone." >&2
+    exit 0
 fi
 
 new="$({ words_of "$ROOT_FILE"; collect_params; } | join_unique)"
