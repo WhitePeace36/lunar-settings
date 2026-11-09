@@ -1,4 +1,4 @@
-SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update)
+SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update lunar-amdgpu-performance)
 
 # Resolve .local names (printers, other machines) through Avahi:
 # insert "mdns_minimal [NOTFOUND=return]" in front of "resolve" on the hosts line.
@@ -18,6 +18,11 @@ _enable_services() {
     for s in "${SERVICES[@]}"; do
         systemctl enable "$s.service" >/dev/null 2>&1 || true
     done
+    # start in the "performance" power profile (once; the panel can change it)
+    if [ -e usr/lib/systemd/system/power-profiles-daemon.service ]; then
+        rm -f var/lib/lunar/ppd-performance-set
+        systemctl enable lunar-ppd-performance.service >/dev/null 2>&1 || true
+    fi
 }
 
 # rtkit hands out realtime priority over D-Bus. Lunar masks it so audio and
@@ -31,14 +36,28 @@ post_install() {
     _enable_nss_mdns
     _enable_services
     _mask_rtkit
+    echo "==> Lunar settings installed. Reboot to apply all of them."
 }
 
 post_upgrade() {
     _enable_nss_mdns
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    # lunar-amdgpu-performance came with lunar-tuning-performance before 2.0.0
+    systemctl enable lunar-amdgpu-performance.service >/dev/null 2>&1 || true
     local s
     for s in ananicy-cpp systemd-resolved; do
         if systemctl is-active --quiet "$s" 2>/dev/null; then
             systemctl restart "$s" || true
         fi
     done
+}
+
+pre_remove() {
+    # put AMD GPUs back to automatic clocks before the files disappear
+    systemctl stop lunar-amdgpu-performance.service >/dev/null 2>&1 || true
+    systemctl disable lunar-amdgpu-performance.service lunar-ppd-performance.service >/dev/null 2>&1 || true
+}
+
+post_remove() {
+    rm -f var/lib/lunar/ppd-performance-set
 }

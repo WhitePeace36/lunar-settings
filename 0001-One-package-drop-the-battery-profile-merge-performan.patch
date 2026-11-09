@@ -1,0 +1,894 @@
+From b5b374929fbb969760f7c1b63ac937e6e9447401 Mon Sep 17 00:00:00 2001
+From: Timon <timon2201@gmail.com>
+Date: Mon, 9 Nov 2026 20:51:30 +0100
+Subject: [PATCH] One package: drop the battery profile, merge performance into
+ it
+
+lunar-settings 2.0.0 is a single package again: common/ and performance/
+are merged into files/, battery/ is gone. It replaces
+lunar-tuning-performance and lunar-tuning-battery.
+
+- sysctl (70-lunar.conf) and tmpfiles (lunar-thp.conf) set to the new
+  lists; vm.defrag_soft and kernel.unprivileged_userns_clone are marked
+  "-" so kernels without them (linux-lts) don't log errors
+- kernel parameters in one file, 10-lunar.conf, with
+  intel_idle.max_cstate=1 added (processor.max_cstate only affects
+  acpi_idle, which Intel CPUs don't use)
+- lunar-amdgpu-performance and the performance power profile are enabled
+  by lunar-settings.install
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01NRvVgxhmC2rjcLktTFXtAX
+---
+ PKGBUILD                                      | 107 +++++++-----------
+ README.md                                     |  82 +++++---------
+ .../usr/lib/lunar/cmdline.d/50-tuning.conf    |  10 --
+ battery/usr/lib/sysctl.d/75-lunar-tuning.conf |  18 ---
+ battery/usr/lib/tmpfiles.d/lunar-tuning.conf  |   5 -
+ common/usr/lib/lunar/cmdline.d/10-common.conf |   8 --
+ common/usr/lib/tmpfiles.d/lunar-thp.conf      |   8 --
+ {common => files}/etc/profile.d/lunar-env.sh  |   0
+ .../etc/security/limits.d/90-lunar.conf       |   0
+ .../etc/ufw/applications.d/lunar-localsend    |   0
+ {common => files}/usr/bin/lunar-gpu-setup     |   0
+ {common => files}/usr/bin/lunar-sdboot-update |   0
+ .../usr/bin/lunar-update-cmdline              |   4 +-
+ .../NetworkManager/conf.d/10-lunar-dns.conf   |   0
+ .../usr/lib/environment.d/60-lunar.conf       |   0
+ .../usr/lib/lunar/amdgpu-performance          |   4 +-
+ files/usr/lib/lunar/cmdline.d/10-lunar.conf   |  34 ++++++
+ .../modprobe.d/lunar-audio-performance.conf   |   2 +-
+ .../usr/lib/modprobe.d/lunar-nvidia.conf      |   0
+ .../usr/lib/modprobe.d/lunar-watchdog.conf    |   0
+ .../usr/lib/modules-load.d/lunar-bbr.conf     |   0
+ .../usr/lib/modules-load.d/lunar-ntsync.conf  |   0
+ .../usr/lib/sysctl.d/70-lunar.conf            |  43 ++++---
+ .../lib/systemd/journald.conf.d/10-lunar.conf |   0
+ .../resolved.conf.d/10-lunar-mdns.conf        |   0
+ .../system-sleep/lunar-amdgpu-performance     |   0
+ .../lib/systemd/system.conf.d/10-lunar.conf   |   0
+ .../system/lunar-amdgpu-performance.service   |   0
+ .../system/lunar-ppd-performance.service      |   0
+ .../systemd/user.conf.d/10-lunar-limits.conf  |   0
+ .../systemd/user.conf.d/10-lunar-timeout.conf |   0
+ .../usr/lib/systemd/zram-generator.conf       |   0
+ files/usr/lib/tmpfiles.d/lunar-thp.conf       |  12 ++
+ .../rules.d/60-lunar-disk-performance.rules   |   2 +-
+ .../udev/rules.d/60-lunar-ioscheduler.rules   |   0
+ .../rules.d/90-lunar-amdgpu-performance.rules |   0
+ .../icons/hicolor/128x128/apps/lunar.png      | Bin
+ .../share/icons/hicolor/16x16/apps/lunar.png  | Bin
+ .../icons/hicolor/256x256/apps/lunar.png      | Bin
+ .../share/icons/hicolor/32x32/apps/lunar.png  | Bin
+ .../share/icons/hicolor/48x48/apps/lunar.png  | Bin
+ .../share/icons/hicolor/64x64/apps/lunar.png  | Bin
+ .../icons/hicolor/scalable/apps/lunar.svg     |   0
+ .../share/libalpm/hooks/90-lunar-cmdline.hook |   0
+ .../share/libalpm/hooks/95-lunar-sdboot.hook  |   0
+ {common => files}/usr/share/pixmaps/lunar.svg |   0
+ lunar-settings.install                        |  21 +++-
+ lunar-tuning-performance.install              |  25 ----
+ .../usr/lib/lunar/cmdline.d/50-tuning.conf    |  15 ---
+ .../usr/lib/sysctl.d/75-lunar-tuning.conf     |   4 -
+ .../usr/lib/tmpfiles.d/lunar-tuning.conf      |   3 -
+ 51 files changed, 162 insertions(+), 245 deletions(-)
+ delete mode 100644 battery/usr/lib/lunar/cmdline.d/50-tuning.conf
+ delete mode 100644 battery/usr/lib/sysctl.d/75-lunar-tuning.conf
+ delete mode 100644 battery/usr/lib/tmpfiles.d/lunar-tuning.conf
+ delete mode 100644 common/usr/lib/lunar/cmdline.d/10-common.conf
+ delete mode 100644 common/usr/lib/tmpfiles.d/lunar-thp.conf
+ rename {common => files}/etc/profile.d/lunar-env.sh (100%)
+ rename {common => files}/etc/security/limits.d/90-lunar.conf (100%)
+ rename {common => files}/etc/ufw/applications.d/lunar-localsend (100%)
+ rename {common => files}/usr/bin/lunar-gpu-setup (100%)
+ rename {common => files}/usr/bin/lunar-sdboot-update (100%)
+ rename {common => files}/usr/bin/lunar-update-cmdline (94%)
+ rename {common => files}/usr/lib/NetworkManager/conf.d/10-lunar-dns.conf (100%)
+ rename {common => files}/usr/lib/environment.d/60-lunar.conf (100%)
+ rename {performance => files}/usr/lib/lunar/amdgpu-performance (96%)
+ create mode 100644 files/usr/lib/lunar/cmdline.d/10-lunar.conf
+ rename {performance => files}/usr/lib/modprobe.d/lunar-audio-performance.conf (60%)
+ rename {common => files}/usr/lib/modprobe.d/lunar-nvidia.conf (100%)
+ rename {common => files}/usr/lib/modprobe.d/lunar-watchdog.conf (100%)
+ rename {common => files}/usr/lib/modules-load.d/lunar-bbr.conf (100%)
+ rename {common => files}/usr/lib/modules-load.d/lunar-ntsync.conf (100%)
+ rename {common => files}/usr/lib/sysctl.d/70-lunar.conf (52%)
+ rename {common => files}/usr/lib/systemd/journald.conf.d/10-lunar.conf (100%)
+ rename {common => files}/usr/lib/systemd/resolved.conf.d/10-lunar-mdns.conf (100%)
+ rename {performance => files}/usr/lib/systemd/system-sleep/lunar-amdgpu-performance (100%)
+ rename {common => files}/usr/lib/systemd/system.conf.d/10-lunar.conf (100%)
+ rename {performance => files}/usr/lib/systemd/system/lunar-amdgpu-performance.service (100%)
+ rename {performance => files}/usr/lib/systemd/system/lunar-ppd-performance.service (100%)
+ rename {common => files}/usr/lib/systemd/user.conf.d/10-lunar-limits.conf (100%)
+ rename {common => files}/usr/lib/systemd/user.conf.d/10-lunar-timeout.conf (100%)
+ rename {common => files}/usr/lib/systemd/zram-generator.conf (100%)
+ create mode 100644 files/usr/lib/tmpfiles.d/lunar-thp.conf
+ rename {performance => files}/usr/lib/udev/rules.d/60-lunar-disk-performance.rules (90%)
+ rename {common => files}/usr/lib/udev/rules.d/60-lunar-ioscheduler.rules (100%)
+ rename {performance => files}/usr/lib/udev/rules.d/90-lunar-amdgpu-performance.rules (100%)
+ rename {common => files}/usr/share/icons/hicolor/128x128/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/16x16/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/256x256/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/32x32/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/48x48/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/64x64/apps/lunar.png (100%)
+ rename {common => files}/usr/share/icons/hicolor/scalable/apps/lunar.svg (100%)
+ rename {common => files}/usr/share/libalpm/hooks/90-lunar-cmdline.hook (100%)
+ rename {common => files}/usr/share/libalpm/hooks/95-lunar-sdboot.hook (100%)
+ rename {common => files}/usr/share/pixmaps/lunar.svg (100%)
+ delete mode 100644 lunar-tuning-performance.install
+ delete mode 100644 performance/usr/lib/lunar/cmdline.d/50-tuning.conf
+ delete mode 100644 performance/usr/lib/sysctl.d/75-lunar-tuning.conf
+ delete mode 100644 performance/usr/lib/tmpfiles.d/lunar-tuning.conf
+
+diff --git a/PKGBUILD b/PKGBUILD
+index 2cd4db6..429e62c 100644
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,85 +1,54 @@
+ # Maintainer: Timon <timon2201@gmail.com>
+ #
+-# All of Lunar's system settings. This PKGBUILD builds three packages from the
+-# folders next to it, as they are on disk (nothing is downloaded). Each folder
+-# mirrors the filesystem, e.g. common/usr/lib/sysctl.d/70-lunar.conf is
+-# installed as /usr/lib/sysctl.d/70-lunar.conf:
++# All of Lunar's system settings: sysctl, transparent hugepages and other
++# tmpfiles, zram, limits, kernel command line, udev rules (I/O schedulers,
++# disks, AMD GPU), mDNS, environment, the systemd-boot entry tools and
++# lunar-gpu-setup.
+ #
+-#   common/       -> lunar-settings            both profiles: sysctl, THP/tmpfiles,
+-#                                              zram, limits, mDNS, I/O schedulers,
+-#                                              boot entries, GPU setup, ...
+-#   performance/  -> lunar-tuning-performance  "Full performance" profile
+-#   battery/      -> lunar-tuning-battery      "Battery friendly" profile
++# files/ mirrors the filesystem: files/usr/lib/sysctl.d/70-lunar.conf is
++# installed as /usr/lib/sysctl.d/70-lunar.conf. Nothing is downloaded.
+ #
+-# Build from this checkout and install lunar-settings plus ONE profile
+-# (makepkg -si would try to install both profiles, which conflict):
+-#   makepkg -s
+-#   sudo pacman -U lunar-settings-[0-9]*.pkg.tar.zst lunar-tuning-performance-*.pkg.tar.zst
++# Build and install from this checkout:   makepkg -si
+ #
+ # Releasing a change for Lunar: edit the files, raise pkgver (or pkgrel),
+ # commit and push, then in the lunar repo set _commit in
+ # packages/lunar-settings/prepare.sh and run
+ #   scripts/build-packages.sh lunar-settings && scripts/publish.sh
+ 
+-pkgbase=lunar-settings
+-pkgname=('lunar-settings' 'lunar-tuning-performance' 'lunar-tuning-battery')
+-pkgver=1.2.0
++pkgname=lunar-settings
++pkgver=2.0.0
+ pkgrel=1
++pkgdesc='Lunar - system settings (sysctl, THP, zram, limits, kernel parameters, mDNS, boot entries, GPU setup)'
+ arch=('any')
+ url='https://github.com/WhitePeace36/lunar-settings'
+ license=('GPL-2.0-only')
+-
+-# copy one folder into the package, keep the modes of the files in git
+-_install_tree() {
+-  cp -a --no-preserve=ownership "$startdir/$1/." "$pkgdir/"
+-}
+-
+-package_lunar-settings() {
+-  pkgdesc='Lunar - system settings (sysctl, THP, zram, limits, mDNS, boot entries, GPU setup)'
+-  # depends are listed here and not globally: lunar-tuning is built by this
+-  # same PKGBUILD and must not be needed at build time
+-  depends=(
+-    'ananicy-cpp-lunar'
+-    'lunar-ananicy-rules'
+-    'elara'
+-    'zram-generator'
+-    'avahi'
+-    'nss-mdns'
+-    'wireless-regdb'
+-    'pciutils'
+-    'most'
+-    'micro'
+-    'systemd>=256'
+-    'lunar-tuning'
+-  )
+-  optdepends=('networkmanager: DNS through systemd-resolved'
+-              'ufw: the LocalSend firewall rule')
+-  backup=('etc/security/limits.d/90-lunar.conf')
+-  install=lunar-settings.install
+-
+-  _install_tree common
+-  chmod 755 "$pkgdir/usr/bin/"* "$pkgdir/etc/profile.d/"*.sh
+-}
+-
+-package_lunar-tuning-performance() {
+-  pkgdesc='Lunar - full performance tuning profile'
+-  depends=('systemd' 'hdparm')
+-  optdepends=('power-profiles-daemon: start in the "performance" power profile')
+-  provides=('lunar-tuning')
+-  conflicts=('lunar-tuning')
+-  install=lunar-tuning-performance.install
+-
+-  _install_tree performance
+-  chmod 755 "$pkgdir/usr/lib/lunar/amdgpu-performance" \
++depends=(
++  'ananicy-cpp-lunar'
++  'lunar-ananicy-rules'
++  'elara'
++  'zram-generator'
++  'avahi'
++  'nss-mdns'
++  'wireless-regdb'
++  'pciutils'
++  'hdparm'
++  'most'
++  'micro'
++  'systemd>=256'
++)
++optdepends=('networkmanager: DNS through systemd-resolved'
++            'ufw: the LocalSend firewall rule'
++            'power-profiles-daemon: start in the "performance" power profile')
++# the two tuning profiles of 1.x are part of this package now
++provides=('lunar-tuning')
++conflicts=('lunar-tuning' 'lunar-tuning-performance' 'lunar-tuning-battery')
++replaces=('lunar-tuning-performance' 'lunar-tuning-battery')
++backup=('etc/security/limits.d/90-lunar.conf')
++install=lunar-settings.install
++
++package() {
++  cp -a --no-preserve=ownership "$startdir/files/." "$pkgdir/"
++  chmod 755 "$pkgdir/usr/bin/"* "$pkgdir/etc/profile.d/"*.sh \
++            "$pkgdir/usr/lib/lunar/amdgpu-performance" \
+             "$pkgdir/usr/lib/systemd/system-sleep/lunar-amdgpu-performance"
+ }
+-
+-package_lunar-tuning-battery() {
+-  pkgdesc='Lunar - battery-friendly tuning profile'
+-  depends=('systemd')
+-  optdepends=('power-profiles-daemon: switch power profiles from the panel')
+-  provides=('lunar-tuning')
+-  conflicts=('lunar-tuning')
+-
+-  _install_tree battery
+-}
+diff --git a/README.md b/README.md
+index b820df7..99e49ee 100644
+--- a/README.md
++++ b/README.md
+@@ -1,72 +1,52 @@
+ # lunar-settings
+ 
+ System settings of [Lunar](https://github.com/WhitePeace36/lunar) (KDE Plasma
+-on Arch Linux with the linux-lunar kernel): sysctl, transparent hugepages and
+-other tmpfiles, zram, limits, kernel command line, udev rules, mDNS, the
+-systemd-boot entry and GPU driver tools, and the two tuning profiles.
++on Arch Linux with the linux-lunar kernel), as one package.
+ 
+-One PKGBUILD, three packages. Every folder mirrors the filesystem of the
+-installed system: `common/usr/lib/sysctl.d/70-lunar.conf` is installed as
++`files/` mirrors the filesystem of the installed system:
++`files/usr/lib/sysctl.d/70-lunar.conf` is installed as
+ `/usr/lib/sysctl.d/70-lunar.conf`.
+ 
+-| Folder | Package | Installed |
+-|---|---|---|
+-| `common/` | `lunar-settings` | always |
+-| `performance/` | `lunar-tuning-performance` | "Full performance" profile |
+-| `battery/` | `lunar-tuning-battery` | "Battery friendly" profile |
+-
+-The two profile packages conflict (`provides=lunar-tuning`); the installer
+-picks one, and you switch with `sudo pacman -S lunar-tuning-battery`
+-(or `-performance`).
+-
+ ## Where each setting lives
+ 
+-| Setting | Both profiles (`common/`) | Per profile (`performance/`, `battery/`) |
+-|---|---|---|
+-| sysctl | `usr/lib/sysctl.d/70-lunar.conf` | `usr/lib/sysctl.d/75-lunar-tuning.conf` |
+-| tmpfiles (THP, zswap, MGLRU, khugepaged) | `usr/lib/tmpfiles.d/lunar-thp.conf` | `usr/lib/tmpfiles.d/lunar-tuning.conf` |
+-| Kernel command line | `usr/lib/lunar/cmdline.d/10-common.conf` | `usr/lib/lunar/cmdline.d/50-tuning.conf` |
+-| Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` | - |
+-| Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` | - |
+-| zram | `usr/lib/systemd/zram-generator.conf` | - |
+-| udev (I/O scheduler, disks, AMD GPU) | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules` | `usr/lib/udev/rules.d/60-lunar-disk-performance.rules`, `90-lunar-amdgpu-performance.rules` |
+-| Kernel modules | `usr/lib/modprobe.d/`, `usr/lib/modules-load.d/` | `usr/lib/modprobe.d/lunar-audio-performance.conf` |
+-| Services | enabled in `lunar-settings.install` | `lunar-tuning-performance.install` |
+-
+-Files are read in name order and a later file wins, so the profile values
+-(`75-…`) override the common ones (`70-…`). Users override both with their own
+-file in `/etc` (`/etc/sysctl.d/99-local.conf`, `/etc/tmpfiles.d/…` with the
+-same name, `/etc/lunar/cmdline.d/…`), which pacman never touches.
++| Setting | File (under `files/`) |
++|---|---|
++| sysctl | `usr/lib/sysctl.d/70-lunar.conf` |
++| tmpfiles (THP, khugepaged, zswap, MGLRU) | `usr/lib/tmpfiles.d/lunar-thp.conf` |
++| Kernel command line | `usr/lib/lunar/cmdline.d/10-lunar.conf` |
++| Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` |
++| Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` |
++| zram | `usr/lib/systemd/zram-generator.conf` |
++| udev: I/O scheduler, SATA/HDD power, AMD GPU | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules`, `60-lunar-disk-performance.rules`, `90-lunar-amdgpu-performance.rules` |
++| AMD GPU max power limit + fixed VRAM clock | `usr/lib/lunar/amdgpu-performance`, `lunar-amdgpu-performance.service` |
++| Kernel modules | `usr/lib/modprobe.d/`, `usr/lib/modules-load.d/` |
++| Boot entries, kernel command line tools | `usr/bin/lunar-sdboot-update`, `usr/bin/lunar-update-cmdline`, `usr/share/libalpm/hooks/` |
++| GPU driver selection | `usr/bin/lunar-gpu-setup` |
++| Services enabled on install | `lunar-settings.install` |
++
++Users override any of these with their own file in `/etc`, which pacman never
++touches: `/etc/sysctl.d/99-local.conf`, a file with the same name in
++`/etc/tmpfiles.d/`, or a copy of `10-lunar.conf` in `/etc/lunar/cmdline.d/`
++(then `sudo lunar-update-cmdline`).
++
++The settings are tuned for desktops: CPU idle limited to C1, no PCIe power
++saving, performance governor, disks and sound chip never powered down. On a
++laptop this costs battery life.
+ 
+ ## Building
+ 
+ ```sh
+-makepkg -s
+-sudo pacman -U lunar-settings-[0-9]*.pkg.tar.zst lunar-tuning-performance-*.pkg.tar.zst
++makepkg -si
+ ```
+ 
+-Install `lunar-settings` and one of the two profile packages (`makepkg -si`
+-would try to install both profiles, which conflict). Outside Lunar,
+-`lunar-settings` needs the other Lunar packages it depends on
++Outside Lunar, `lunar-settings` needs the other Lunar packages it depends on
+ (`ananicy-cpp-lunar`, `lunar-ananicy-rules`, `elara`) from the `[lunar]` repo.
+ 
+-## The profiles and linux-lunar
+-
+-linux-lunar compiles in memory defaults that trade background work for fewer
+-stalls (`vm.defrag_mode=1`, `vm.watermark_scale_factor=500`,
+-`vm.compaction_proactiveness=50`, khugepaged scanning 8x as fast, writeback
+-every second). The performance profile keeps them. The battery profile sets
+-them back towards upstream (`75-lunar-tuning.conf`, `lunar-tuning.conf`), so
+-kswapd, kcompactd and khugepaged wake up less. linux-lunar's patches
+-themselves don't add background work: they only change who does the work
+-(kswapd/kcompactd instead of the program that allocates).
+-
+ ## Releasing a change
+ 
+-1. Edit the file(s). A new file just goes into the right folder at its
+-   final path.
+-2. Raise `pkgver` in `PKGBUILD` (e.g. 1.1.0 -> 1.2.0), or `pkgrel` for a
+-   small fix. All three packages get the new version. Commit and push.
++1. Edit the file(s). A new file just goes into `files/` at its final path.
++2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.0 -> 2.1.0), or `pkgrel` for a
++   small fix. Commit and push.
+ 3. In the `lunar` repo: set `_commit` in `packages/lunar-settings/prepare.sh`
+    to the new commit, then `scripts/build-packages.sh lunar-settings` and
+    `scripts/publish.sh`.
+diff --git a/battery/usr/lib/lunar/cmdline.d/50-tuning.conf b/battery/usr/lib/lunar/cmdline.d/50-tuning.conf
+deleted file mode 100644
+index 429eb41..0000000
+--- a/battery/usr/lib/lunar/cmdline.d/50-tuning.conf
++++ /dev/null
+@@ -1,10 +0,0 @@
+-# Lunar battery profile - kernel parameters
+-# (no processor.max_cstate / pcie_aspm=off: the CPU and PCIe links may sleep)
+-nmi_watchdog=0
+-nowatchdog
+-transparent_hugepage=always
+-transparent_hugepage_tmpfs=always
+-audit=0
+-split_lock_detect=off
+-zswap.enabled=0
+-preempt=full
+diff --git a/battery/usr/lib/sysctl.d/75-lunar-tuning.conf b/battery/usr/lib/sysctl.d/75-lunar-tuning.conf
+deleted file mode 100644
+index f2cff51..0000000
+--- a/battery/usr/lib/sysctl.d/75-lunar-tuning.conf
++++ /dev/null
+@@ -1,18 +0,0 @@
+-# Lunar battery profile - values that differ from the performance profile.
+-# linux-lunar's compiled-in memory defaults keep kswapd/kcompactd busy in the
+-# background to avoid allocation stalls in games; on battery that trade is
+-# turned back towards upstream, so the CPU wakes up less.
+-
+-# No proactive compaction: kcompactd otherwise wakes every 500 ms to check
+-# fragmentation (linux-lunar: 50, upstream: 20)
+-vm.compaction_proactiveness = 0
+-# Don't keep whole free 2 MiB blocks around in the background
+-# (linux-lunar: 1). vm.defrag_soft only matters with defrag_mode=1.
+-vm.defrag_mode = 0
+-# kswapd keeps less memory free, so it reclaims and compresses to zram less
+-# often (70-lunar.conf / linux-lunar: 500, upstream: 10)
+-vm.watermark_scale_factor = 125
+-# Flush dirty pages every 15 s instead of every second and let data wait up
+-# to 30 s (upstream), so writes are batched and disks can idle
+-vm.dirty_writeback_centisecs = 1500
+-vm.dirty_expire_centisecs = 3000
+diff --git a/battery/usr/lib/tmpfiles.d/lunar-tuning.conf b/battery/usr/lib/tmpfiles.d/lunar-tuning.conf
+deleted file mode 100644
+index 12f5764..0000000
+--- a/battery/usr/lib/tmpfiles.d/lunar-tuning.conf
++++ /dev/null
+@@ -1,5 +0,0 @@
+-# Lunar battery profile - khugepaged back at upstream pace
+-# (linux-lunar: 8192 pages every 2.5 s, retry after 2.5 s)
+-w /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan          - - - - 4096
+-w /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs   - - - - 10000
+-w /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs  - - - - 60000
+diff --git a/common/usr/lib/lunar/cmdline.d/10-common.conf b/common/usr/lib/lunar/cmdline.d/10-common.conf
+deleted file mode 100644
+index a26fc85..0000000
+--- a/common/usr/lib/lunar/cmdline.d/10-common.conf
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# Kernel parameters for every Lunar install, on top of the boot loader's own
+-# defaults (systemd-boot: "nowatchdog quiet splash"). The tuning profile adds
+-# its own list in 50-tuning.conf. Run lunar-update-cmdline after editing an
+-# override in /etc/lunar/cmdline.d/.
+-
+-loglevel=3
+-rd.systemd.show_status=false
+-libahci.ignore_sss=1
+diff --git a/common/usr/lib/tmpfiles.d/lunar-thp.conf b/common/usr/lib/tmpfiles.d/lunar-thp.conf
+deleted file mode 100644
+index ff5b1d3..0000000
+--- a/common/usr/lib/tmpfiles.d/lunar-thp.conf
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# Lunar transparent hugepage / memory settings, shared by both profiles.
+-# khugepaged scan rates are set by the performance profile only.
+-
+-w /sys/kernel/mm/transparent_hugepage/defrag            - - - - defer
+-w /sys/kernel/mm/transparent_hugepage/shmem_enabled     - - - - always
+-w /sys/kernel/mm/transparent_hugepage/shrink_underused  - - - - 0
+-w /sys/module/zswap/parameters/enabled                  - - - - 0
+-w /sys/kernel/mm/lru_gen/min_ttl_ms                     - - - - 1000
+diff --git a/common/etc/profile.d/lunar-env.sh b/files/etc/profile.d/lunar-env.sh
+similarity index 100%
+rename from common/etc/profile.d/lunar-env.sh
+rename to files/etc/profile.d/lunar-env.sh
+diff --git a/common/etc/security/limits.d/90-lunar.conf b/files/etc/security/limits.d/90-lunar.conf
+similarity index 100%
+rename from common/etc/security/limits.d/90-lunar.conf
+rename to files/etc/security/limits.d/90-lunar.conf
+diff --git a/common/etc/ufw/applications.d/lunar-localsend b/files/etc/ufw/applications.d/lunar-localsend
+similarity index 100%
+rename from common/etc/ufw/applications.d/lunar-localsend
+rename to files/etc/ufw/applications.d/lunar-localsend
+diff --git a/common/usr/bin/lunar-gpu-setup b/files/usr/bin/lunar-gpu-setup
+similarity index 100%
+rename from common/usr/bin/lunar-gpu-setup
+rename to files/usr/bin/lunar-gpu-setup
+diff --git a/common/usr/bin/lunar-sdboot-update b/files/usr/bin/lunar-sdboot-update
+similarity index 100%
+rename from common/usr/bin/lunar-sdboot-update
+rename to files/usr/bin/lunar-sdboot-update
+diff --git a/common/usr/bin/lunar-update-cmdline b/files/usr/bin/lunar-update-cmdline
+similarity index 94%
+rename from common/usr/bin/lunar-update-cmdline
+rename to files/usr/bin/lunar-update-cmdline
+index 658ce6b..83f9f98 100755
+--- a/common/usr/bin/lunar-update-cmdline
++++ b/files/usr/bin/lunar-update-cmdline
+@@ -8,8 +8,8 @@
+ # /etc/lunar/cmdline-root holds what the installer found for this machine
+ # (root=, LUKS, Btrfs subvolume, resume=, quiet splash rw). A file in
+ # /etc/lunar/cmdline.d with the same name as one in /usr/lib/lunar/cmdline.d
+-# replaces it, so an empty /etc/lunar/cmdline.d/50-tuning.conf disables the
+-# tuning profile's parameters. Afterwards the systemd-boot entries are
++# replaces it, so an edited copy of 10-lunar.conf in /etc/lunar/cmdline.d
++# changes Lunar's parameters. Afterwards the systemd-boot entries are
+ # rewritten (lunar-sdboot-update).
+ #
+ # Options:
+diff --git a/common/usr/lib/NetworkManager/conf.d/10-lunar-dns.conf b/files/usr/lib/NetworkManager/conf.d/10-lunar-dns.conf
+similarity index 100%
+rename from common/usr/lib/NetworkManager/conf.d/10-lunar-dns.conf
+rename to files/usr/lib/NetworkManager/conf.d/10-lunar-dns.conf
+diff --git a/common/usr/lib/environment.d/60-lunar.conf b/files/usr/lib/environment.d/60-lunar.conf
+similarity index 100%
+rename from common/usr/lib/environment.d/60-lunar.conf
+rename to files/usr/lib/environment.d/60-lunar.conf
+diff --git a/performance/usr/lib/lunar/amdgpu-performance b/files/usr/lib/lunar/amdgpu-performance
+similarity index 96%
+rename from performance/usr/lib/lunar/amdgpu-performance
+rename to files/usr/lib/lunar/amdgpu-performance
+index 0552c78..66d51ac 100644
+--- a/performance/usr/lib/lunar/amdgpu-performance
++++ b/files/usr/lib/lunar/amdgpu-performance
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env bash
+-# amdgpu-performance - Lunar performance profile for AMD GPUs (amdgpu driver)
++# amdgpu-performance - Lunar performance settings for AMD GPUs (amdgpu driver)
+ #
+ #   apply  : power limit -> the card's maximum (power1_cap_max)
+ #            power profile -> 3D_FULL_SCREEN
+@@ -11,7 +11,7 @@
+ # (tens of watts on big cards) in exchange for no memory reclocking stutter.
+ #
+ # Set LUNAR_AMDGPU_SKIP=1 in /etc/lunar/amdgpu-performance.conf to disable
+-# this without switching profiles.
++# this without removing lunar-settings.
+ 
+ set -u
+ 
+diff --git a/files/usr/lib/lunar/cmdline.d/10-lunar.conf b/files/usr/lib/lunar/cmdline.d/10-lunar.conf
+new file mode 100644
+index 0000000..ba05922
+--- /dev/null
++++ b/files/usr/lib/lunar/cmdline.d/10-lunar.conf
+@@ -0,0 +1,34 @@
++# Lunar kernel parameters, on top of the root/LUKS options the installer
++# wrote to /etc/lunar/cmdline-root. lunar-update-cmdline puts them into
++# /etc/kernel/cmdline and the systemd-boot entries. To drop or change some:
++# copy this file to /etc/lunar/cmdline.d/10-lunar.conf, edit it there, then
++# run  sudo lunar-update-cmdline  (a file in /etc replaces the one here).
++
++# quiet boot
++loglevel=3
++rd.systemd.show_status=false
++
++# no watchdogs, no audit
++nmi_watchdog=0
++nowatchdog
++audit=0
++
++# CPU idle: only C1 (processor.* for acpi_idle, mostly AMD; intel_idle.* for Intel)
++processor.max_cstate=1
++intel_idle.max_cstate=1
++# no PCIe link power saving
++pcie_aspm=off
++# periodic tick and the performance governor (the distro kernel is built
++# with an idle tick and schedutil)
++nohz=off
++cpufreq.default_governor=performance
++preempt=full
++
++# memory
++transparent_hugepage=always
++transparent_hugepage_tmpfs=always
++zswap.enabled=0
++
++# misc
++split_lock_detect=off
++libahci.ignore_sss=1
+diff --git a/performance/usr/lib/modprobe.d/lunar-audio-performance.conf b/files/usr/lib/modprobe.d/lunar-audio-performance.conf
+similarity index 60%
+rename from performance/usr/lib/modprobe.d/lunar-audio-performance.conf
+rename to files/usr/lib/modprobe.d/lunar-audio-performance.conf
+index 8761c4d..7883759 100644
+--- a/performance/usr/lib/modprobe.d/lunar-audio-performance.conf
++++ b/files/usr/lib/modprobe.d/lunar-audio-performance.conf
+@@ -1,3 +1,3 @@
+-# Lunar performance profile: keep the onboard sound chip powered, so audio
++# Lunar: keep the onboard sound chip powered, so audio
+ # doesn't start with a pop or a short delay after silence
+ options snd_hda_intel power_save=0 power_save_controller=N
+diff --git a/common/usr/lib/modprobe.d/lunar-nvidia.conf b/files/usr/lib/modprobe.d/lunar-nvidia.conf
+similarity index 100%
+rename from common/usr/lib/modprobe.d/lunar-nvidia.conf
+rename to files/usr/lib/modprobe.d/lunar-nvidia.conf
+diff --git a/common/usr/lib/modprobe.d/lunar-watchdog.conf b/files/usr/lib/modprobe.d/lunar-watchdog.conf
+similarity index 100%
+rename from common/usr/lib/modprobe.d/lunar-watchdog.conf
+rename to files/usr/lib/modprobe.d/lunar-watchdog.conf
+diff --git a/common/usr/lib/modules-load.d/lunar-bbr.conf b/files/usr/lib/modules-load.d/lunar-bbr.conf
+similarity index 100%
+rename from common/usr/lib/modules-load.d/lunar-bbr.conf
+rename to files/usr/lib/modules-load.d/lunar-bbr.conf
+diff --git a/common/usr/lib/modules-load.d/lunar-ntsync.conf b/files/usr/lib/modules-load.d/lunar-ntsync.conf
+similarity index 100%
+rename from common/usr/lib/modules-load.d/lunar-ntsync.conf
+rename to files/usr/lib/modules-load.d/lunar-ntsync.conf
+diff --git a/common/usr/lib/sysctl.d/70-lunar.conf b/files/usr/lib/sysctl.d/70-lunar.conf
+similarity index 52%
+rename from common/usr/lib/sysctl.d/70-lunar.conf
+rename to files/usr/lib/sysctl.d/70-lunar.conf
+index 27d7b83..37c4f36 100644
+--- a/common/usr/lib/sysctl.d/70-lunar.conf
++++ b/files/usr/lib/sysctl.d/70-lunar.conf
+@@ -1,50 +1,49 @@
+-# Lunar sysctl settings, shared by both tuning profiles.
+-# Profile-specific values live in 75-lunar-tuning.conf (lunar-tuning-*).
+-# Override any of these in /etc/sysctl.d/99-local.conf.
++# Lunar sysctl settings. Override any of them in /etc/sysctl.d/99-local.conf.
++# A leading "-" makes systemd-sysctl skip a key the running kernel doesn't
++# have (vm.defrag_soft exists only in linux-lunar, not in linux-lts).
+ 
+-# --- Memory / swap (tuned for zram) ---
++# --- memory / swap (zram) ---
+ vm.swappiness = 150
+ vm.page-cluster = 0
+ vm.vfs_cache_pressure = 50
+ vm.zone_reclaim_mode = 0
+-vm.watermark_scale_factor = 500
+-# Same as linux-lunar's compiled-in default: the boost is a percentage of the
+-# high watermark, so it stays small when watermark_scale_factor is large.
+-# vm.defrag_mode is left to the kernel (linux-lunar: 1 with defrag_soft).
+-vm.watermark_boost_factor = 600
+ vm.page_lock_unfairness = 3
+ vm.stat_interval = 10
+ vm.max_map_count = 2147483642
+ vm.unprivileged_userfaultfd = 1
+-# Never refuse allocations; when memory really runs out the OOM killer acts
+ vm.overcommit_memory = 1
+ 
+-# --- Dirty page writeback ---
++# --- dirty page writeback ---
+ vm.dirty_bytes = 536870912
+ vm.dirty_background_bytes = 67108864
++vm.dirty_expire_centisecs = 500
++vm.dirty_writeback_centisecs = 100
+ 
+-# --- Kernel ---
+-kernel.nmi_watchdog = 0
+-kernel.split_lock_mitigate = 0
++# --- watermarks and compaction ---
++vm.watermark_scale_factor = 500
++vm.defrag_mode = 1
++-vm.defrag_soft = 1
++vm.watermark_boost_factor = 600
++vm.compaction_proactiveness = 50
++
++# --- kernel ---
+ kernel.threads-max = 1073741823
+-kernel.unprivileged_userns_clone = 1
++kernel.split_lock_mitigate = 0
++kernel.nmi_watchdog = 0
++-kernel.unprivileged_userns_clone = 1
++kernel.printk = 3 3 2 3
+ kernel.kptr_restrict = 1
+ kernel.perf_event_paranoid = 0
+-kernel.printk = 3 3 2 3
+-kernel.printk_devkmsg = off
+-kernel.sysrq = 1
+ 
+-# --- Files ---
+-fs.file-max = 2097152
++# --- files ---
+ fs.inotify.max_queued_events = 65536
+ 
+-# --- Network ---
++# --- network ---
+ net.core.busy_read = 0
+ net.core.netdev_max_backlog = 16384
+ net.core.rmem_max = 134217728
+ net.core.wmem_max = 134217728
+ net.core.rmem_default = 8388608
+ net.core.wmem_default = 8388608
+-net.core.default_qdisc = fq
+ net.ipv4.tcp_congestion_control = bbr
+ net.ipv4.tcp_mtu_probing = 1
+diff --git a/common/usr/lib/systemd/journald.conf.d/10-lunar.conf b/files/usr/lib/systemd/journald.conf.d/10-lunar.conf
+similarity index 100%
+rename from common/usr/lib/systemd/journald.conf.d/10-lunar.conf
+rename to files/usr/lib/systemd/journald.conf.d/10-lunar.conf
+diff --git a/common/usr/lib/systemd/resolved.conf.d/10-lunar-mdns.conf b/files/usr/lib/systemd/resolved.conf.d/10-lunar-mdns.conf
+similarity index 100%
+rename from common/usr/lib/systemd/resolved.conf.d/10-lunar-mdns.conf
+rename to files/usr/lib/systemd/resolved.conf.d/10-lunar-mdns.conf
+diff --git a/performance/usr/lib/systemd/system-sleep/lunar-amdgpu-performance b/files/usr/lib/systemd/system-sleep/lunar-amdgpu-performance
+similarity index 100%
+rename from performance/usr/lib/systemd/system-sleep/lunar-amdgpu-performance
+rename to files/usr/lib/systemd/system-sleep/lunar-amdgpu-performance
+diff --git a/common/usr/lib/systemd/system.conf.d/10-lunar.conf b/files/usr/lib/systemd/system.conf.d/10-lunar.conf
+similarity index 100%
+rename from common/usr/lib/systemd/system.conf.d/10-lunar.conf
+rename to files/usr/lib/systemd/system.conf.d/10-lunar.conf
+diff --git a/performance/usr/lib/systemd/system/lunar-amdgpu-performance.service b/files/usr/lib/systemd/system/lunar-amdgpu-performance.service
+similarity index 100%
+rename from performance/usr/lib/systemd/system/lunar-amdgpu-performance.service
+rename to files/usr/lib/systemd/system/lunar-amdgpu-performance.service
+diff --git a/performance/usr/lib/systemd/system/lunar-ppd-performance.service b/files/usr/lib/systemd/system/lunar-ppd-performance.service
+similarity index 100%
+rename from performance/usr/lib/systemd/system/lunar-ppd-performance.service
+rename to files/usr/lib/systemd/system/lunar-ppd-performance.service
+diff --git a/common/usr/lib/systemd/user.conf.d/10-lunar-limits.conf b/files/usr/lib/systemd/user.conf.d/10-lunar-limits.conf
+similarity index 100%
+rename from common/usr/lib/systemd/user.conf.d/10-lunar-limits.conf
+rename to files/usr/lib/systemd/user.conf.d/10-lunar-limits.conf
+diff --git a/common/usr/lib/systemd/user.conf.d/10-lunar-timeout.conf b/files/usr/lib/systemd/user.conf.d/10-lunar-timeout.conf
+similarity index 100%
+rename from common/usr/lib/systemd/user.conf.d/10-lunar-timeout.conf
+rename to files/usr/lib/systemd/user.conf.d/10-lunar-timeout.conf
+diff --git a/common/usr/lib/systemd/zram-generator.conf b/files/usr/lib/systemd/zram-generator.conf
+similarity index 100%
+rename from common/usr/lib/systemd/zram-generator.conf
+rename to files/usr/lib/systemd/zram-generator.conf
+diff --git a/files/usr/lib/tmpfiles.d/lunar-thp.conf b/files/usr/lib/tmpfiles.d/lunar-thp.conf
+new file mode 100644
+index 0000000..7b7e699
+--- /dev/null
++++ b/files/usr/lib/tmpfiles.d/lunar-thp.conf
+@@ -0,0 +1,12 @@
++# Lunar transparent hugepage / memory settings
++
++w /sys/kernel/mm/transparent_hugepage/defrag                            - - - - defer
++w /sys/kernel/mm/transparent_hugepage/shmem_enabled                     - - - - always
++w /sys/kernel/mm/transparent_hugepage/shrink_underused                  - - - - 0
++w /sys/kernel/mm/transparent_hugepage/khugepaged/defrag                 - - - - 0
++w /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan          - - - - 8192
++w /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs   - - - - 2500
++w /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs  - - - - 2500
++w /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap          - - - - 0
++w /sys/module/zswap/parameters/enabled                                  - - - - 0
++w /sys/kernel/mm/lru_gen/min_ttl_ms                                     - - - - 1000
+diff --git a/performance/usr/lib/udev/rules.d/60-lunar-disk-performance.rules b/files/usr/lib/udev/rules.d/60-lunar-disk-performance.rules
+similarity index 90%
+rename from performance/usr/lib/udev/rules.d/60-lunar-disk-performance.rules
+rename to files/usr/lib/udev/rules.d/60-lunar-disk-performance.rules
+index 801793e..f9a1ebf 100644
+--- a/performance/usr/lib/udev/rules.d/60-lunar-disk-performance.rules
++++ b/files/usr/lib/udev/rules.d/60-lunar-disk-performance.rules
+@@ -1,4 +1,4 @@
+-# Lunar performance profile: disks never doze off
++# Lunar: disks never doze off
+ # SATA links stay at full power (no link power management delays)
+ ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}=="?*", ATTR{link_power_management_policy}="max_performance"
+ # Internal hard disks: no spin-down, no aggressive power management (-B 254 -S 0)
+diff --git a/common/usr/lib/udev/rules.d/60-lunar-ioscheduler.rules b/files/usr/lib/udev/rules.d/60-lunar-ioscheduler.rules
+similarity index 100%
+rename from common/usr/lib/udev/rules.d/60-lunar-ioscheduler.rules
+rename to files/usr/lib/udev/rules.d/60-lunar-ioscheduler.rules
+diff --git a/performance/usr/lib/udev/rules.d/90-lunar-amdgpu-performance.rules b/files/usr/lib/udev/rules.d/90-lunar-amdgpu-performance.rules
+similarity index 100%
+rename from performance/usr/lib/udev/rules.d/90-lunar-amdgpu-performance.rules
+rename to files/usr/lib/udev/rules.d/90-lunar-amdgpu-performance.rules
+diff --git a/common/usr/share/icons/hicolor/128x128/apps/lunar.png b/files/usr/share/icons/hicolor/128x128/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/128x128/apps/lunar.png
+rename to files/usr/share/icons/hicolor/128x128/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/16x16/apps/lunar.png b/files/usr/share/icons/hicolor/16x16/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/16x16/apps/lunar.png
+rename to files/usr/share/icons/hicolor/16x16/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/256x256/apps/lunar.png b/files/usr/share/icons/hicolor/256x256/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/256x256/apps/lunar.png
+rename to files/usr/share/icons/hicolor/256x256/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/32x32/apps/lunar.png b/files/usr/share/icons/hicolor/32x32/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/32x32/apps/lunar.png
+rename to files/usr/share/icons/hicolor/32x32/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/48x48/apps/lunar.png b/files/usr/share/icons/hicolor/48x48/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/48x48/apps/lunar.png
+rename to files/usr/share/icons/hicolor/48x48/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/64x64/apps/lunar.png b/files/usr/share/icons/hicolor/64x64/apps/lunar.png
+similarity index 100%
+rename from common/usr/share/icons/hicolor/64x64/apps/lunar.png
+rename to files/usr/share/icons/hicolor/64x64/apps/lunar.png
+diff --git a/common/usr/share/icons/hicolor/scalable/apps/lunar.svg b/files/usr/share/icons/hicolor/scalable/apps/lunar.svg
+similarity index 100%
+rename from common/usr/share/icons/hicolor/scalable/apps/lunar.svg
+rename to files/usr/share/icons/hicolor/scalable/apps/lunar.svg
+diff --git a/common/usr/share/libalpm/hooks/90-lunar-cmdline.hook b/files/usr/share/libalpm/hooks/90-lunar-cmdline.hook
+similarity index 100%
+rename from common/usr/share/libalpm/hooks/90-lunar-cmdline.hook
+rename to files/usr/share/libalpm/hooks/90-lunar-cmdline.hook
+diff --git a/common/usr/share/libalpm/hooks/95-lunar-sdboot.hook b/files/usr/share/libalpm/hooks/95-lunar-sdboot.hook
+similarity index 100%
+rename from common/usr/share/libalpm/hooks/95-lunar-sdboot.hook
+rename to files/usr/share/libalpm/hooks/95-lunar-sdboot.hook
+diff --git a/common/usr/share/pixmaps/lunar.svg b/files/usr/share/pixmaps/lunar.svg
+similarity index 100%
+rename from common/usr/share/pixmaps/lunar.svg
+rename to files/usr/share/pixmaps/lunar.svg
+diff --git a/lunar-settings.install b/lunar-settings.install
+index e74d413..8a20e4e 100644
+--- a/lunar-settings.install
++++ b/lunar-settings.install
+@@ -1,4 +1,4 @@
+-SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update)
++SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update lunar-amdgpu-performance)
+ 
+ # Resolve .local names (printers, other machines) through Avahi:
+ # insert "mdns_minimal [NOTFOUND=return]" in front of "resolve" on the hosts line.
+@@ -18,6 +18,11 @@ _enable_services() {
+     for s in "${SERVICES[@]}"; do
+         systemctl enable "$s.service" >/dev/null 2>&1 || true
+     done
++    # start in the "performance" power profile (once; the panel can change it)
++    if [ -e usr/lib/systemd/system/power-profiles-daemon.service ]; then
++        rm -f var/lib/lunar/ppd-performance-set
++        systemctl enable lunar-ppd-performance.service >/dev/null 2>&1 || true
++    fi
+ }
+ 
+ # rtkit hands out realtime priority over D-Bus. Lunar masks it so audio and
+@@ -31,10 +36,14 @@ post_install() {
+     _enable_nss_mdns
+     _enable_services
+     _mask_rtkit
++    echo "==> Lunar settings installed. Reboot to apply all of them."
+ }
+ 
+ post_upgrade() {
+     _enable_nss_mdns
++    systemctl daemon-reload >/dev/null 2>&1 || true
++    # lunar-amdgpu-performance came with lunar-tuning-performance before 2.0.0
++    systemctl enable lunar-amdgpu-performance.service >/dev/null 2>&1 || true
+     local s
+     for s in ananicy-cpp systemd-resolved; do
+         if systemctl is-active --quiet "$s" 2>/dev/null; then
+@@ -42,3 +51,13 @@ post_upgrade() {
+         fi
+     done
+ }
++
++pre_remove() {
++    # put AMD GPUs back to automatic clocks before the files disappear
++    systemctl stop lunar-amdgpu-performance.service >/dev/null 2>&1 || true
++    systemctl disable lunar-amdgpu-performance.service lunar-ppd-performance.service >/dev/null 2>&1 || true
++}
++
++post_remove() {
++    rm -f var/lib/lunar/ppd-performance-set
++}
+diff --git a/lunar-tuning-performance.install b/lunar-tuning-performance.install
+deleted file mode 100644
+index f3ee7b9..0000000
+--- a/lunar-tuning-performance.install
++++ /dev/null
+@@ -1,25 +0,0 @@
+-post_install() {
+-    systemctl enable lunar-amdgpu-performance.service >/dev/null 2>&1 || true
+-    if [ -e usr/lib/systemd/system/power-profiles-daemon.service ]; then
+-        rm -f var/lib/lunar/ppd-performance-set
+-        systemctl enable lunar-ppd-performance.service >/dev/null 2>&1 || true
+-    fi
+-    echo "==> Lunar performance profile installed. Reboot to apply all settings."
+-}
+-
+-post_upgrade() {
+-    systemctl daemon-reload >/dev/null 2>&1 || true
+-}
+-
+-pre_remove() {
+-    # put AMD GPUs back to automatic clocks before the files disappear
+-    systemctl stop lunar-amdgpu-performance.service >/dev/null 2>&1 || true
+-    systemctl disable lunar-amdgpu-performance.service lunar-ppd-performance.service >/dev/null 2>&1 || true
+-}
+-
+-post_remove() {
+-    rm -f var/lib/lunar/ppd-performance-set
+-    if command -v powerprofilesctl >/dev/null 2>&1; then
+-        powerprofilesctl set balanced >/dev/null 2>&1 || true
+-    fi
+-}
+diff --git a/performance/usr/lib/lunar/cmdline.d/50-tuning.conf b/performance/usr/lib/lunar/cmdline.d/50-tuning.conf
+deleted file mode 100644
+index 52bcb7c..0000000
+--- a/performance/usr/lib/lunar/cmdline.d/50-tuning.conf
++++ /dev/null
+@@ -1,15 +0,0 @@
+-# Lunar performance profile - kernel parameters
+-nmi_watchdog=0
+-nowatchdog
+-processor.max_cstate=1
+-transparent_hugepage=always
+-transparent_hugepage_tmpfs=always
+-audit=0
+-pcie_aspm=off
+-split_lock_detect=off
+-preempt=full
+-zswap.enabled=0
+-# The distro kernel is built for laptops too (idle tick, schedutil);
+-# these restore linux-lunar's desktop defaults: periodic tick, performance governor
+-nohz=off
+-cpufreq.default_governor=performance
+diff --git a/performance/usr/lib/sysctl.d/75-lunar-tuning.conf b/performance/usr/lib/sysctl.d/75-lunar-tuning.conf
+deleted file mode 100644
+index ea37f7d..0000000
+--- a/performance/usr/lib/sysctl.d/75-lunar-tuning.conf
++++ /dev/null
+@@ -1,4 +0,0 @@
+-# Lunar performance profile - values that differ from the battery profile
+-# linux-lunar's default; 80 caused streaming-read hitches in its tests
+-vm.compaction_proactiveness = 50
+-vm.dirty_writeback_centisecs = 100
+diff --git a/performance/usr/lib/tmpfiles.d/lunar-tuning.conf b/performance/usr/lib/tmpfiles.d/lunar-tuning.conf
+deleted file mode 100644
+index 3544450..0000000
+--- a/performance/usr/lib/tmpfiles.d/lunar-tuning.conf
++++ /dev/null
+@@ -1,3 +0,0 @@
+-# Lunar performance profile - faster khugepaged scanning
+-w /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan          - - - - 8192
+-w /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs   - - - - 2500
+-- 
+2.43.0
+

@@ -1,4 +1,4 @@
-# Lunar performance profile: disks never doze off
+# Lunar: disks never doze off
 # SATA links stay at full power (no link power management delays)
 ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}=="?*", ATTR{link_power_management_policy}="max_performance"
 # Internal hard disks: no spin-down, no aggressive power management (-B 254 -S 0)

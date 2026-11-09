@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# amdgpu-performance - Lunar performance profile for AMD GPUs (amdgpu driver)
+# amdgpu-performance - Lunar performance settings for AMD GPUs (amdgpu driver)
 #
 #   apply  : power limit -> the card's maximum (power1_cap_max)
 #            power profile -> 3D_FULL_SCREEN
@@ -11,7 +11,7 @@
 # (tens of watts on big cards) in exchange for no memory reclocking stutter.
 #
 # Set LUNAR_AMDGPU_SKIP=1 in /etc/lunar/amdgpu-performance.conf to disable
-# this without switching profiles.
+# this without removing lunar-settings.
 
 set -u
 

@@ -8,8 +8,8 @@
 # /etc/lunar/cmdline-root holds what the installer found for this machine
 # (root=, LUKS, Btrfs subvolume, resume=, quiet splash rw). A file in
 # /etc/lunar/cmdline.d with the same name as one in /usr/lib/lunar/cmdline.d
-# replaces it, so an empty /etc/lunar/cmdline.d/50-tuning.conf disables the
-# tuning profile's parameters. Afterwards the systemd-boot entries are
+# replaces it, so an edited copy of 10-lunar.conf in /etc/lunar/cmdline.d
+# changes Lunar's parameters. Afterwards the systemd-boot entries are
 # rewritten (lunar-sdboot-update).
 #
 # Options:
