@@ -1,0 +1,14 @@
+[Unit]
+Description=Lunar: start in the "performance" power profile (first boot only)
+After=power-profiles-daemon.service
+Requires=power-profiles-daemon.service
+ConditionPathExists=!/var/lib/lunar/ppd-performance-set
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/powerprofilesctl set performance
+ExecStartPost=/usr/bin/mkdir -p /var/lib/lunar
+ExecStartPost=/usr/bin/touch /var/lib/lunar/ppd-performance-set
+
+[Install]
+WantedBy=multi-user.target

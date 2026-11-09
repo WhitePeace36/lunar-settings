@@ -1,0 +1,14 @@
+[Unit]
+Description=Lunar: AMD GPU performance settings (max power limit, max memory clock)
+Documentation=file:///usr/lib/lunar/amdgpu-performance
+After=systemd-modules-load.service
+ConditionPathExists=/sys/module/amdgpu
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/lunar/amdgpu-performance apply
+ExecStop=/usr/lib/lunar/amdgpu-performance reset
+
+[Install]
+WantedBy=multi-user.target

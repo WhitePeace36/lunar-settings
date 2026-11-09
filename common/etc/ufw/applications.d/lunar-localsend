@@ -1,0 +1,4 @@
+[LocalSend]
+title=LocalSend
+description=Share files with devices on the local network (discovery and transfer)
+ports=53317/tcp|53317/udp

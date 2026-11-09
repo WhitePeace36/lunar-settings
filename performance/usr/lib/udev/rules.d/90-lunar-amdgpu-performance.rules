@@ -1,0 +1,3 @@
+# Apply the AMD GPU performance settings as soon as an amdgpu card appears.
+ACTION=="add", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DRIVERS=="amdgpu", \
+    TAG+="systemd", ENV{SYSTEMD_WANTS}+="lunar-amdgpu-performance.service"

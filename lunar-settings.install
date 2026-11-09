@@ -1,0 +1,44 @@
+SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update)
+
+# Resolve .local names (printers, other machines) through Avahi:
+# insert "mdns_minimal [NOTFOUND=return]" in front of "resolve" on the hosts line.
+_enable_nss_mdns() {
+    local f=etc/nsswitch.conf
+    [ -f "$f" ] || return 0
+    grep -Eq '^hosts:.*\bmdns(_minimal|4_minimal|6_minimal)?\b' "$f" && return 0
+    if grep -Eq '^hosts:.*\bresolve\b' "$f"; then
+        sed -i -E '/^hosts:/ s/\bresolve\b/mdns_minimal [NOTFOUND=return] resolve/' "$f"
+    else
+        sed -i -E '/^hosts:/ s/\bdns\b/mdns_minimal [NOTFOUND=return] dns/' "$f"
+    fi
+}
+
+_enable_services() {
+    local s
+    for s in "${SERVICES[@]}"; do
+        systemctl enable "$s.service" >/dev/null 2>&1 || true
+    done
+}
+
+# rtkit hands out realtime priority over D-Bus. Lunar masks it so audio and
+# other desktop threads stay under Elara's control (ananicy sets their nice
+# values). Undo with: sudo systemctl unmask rtkit-daemon.service
+_mask_rtkit() {
+    systemctl mask rtkit-daemon.service >/dev/null 2>&1 || true
+}
+
+post_install() {
+    _enable_nss_mdns
+    _enable_services
+    _mask_rtkit
+}
+
+post_upgrade() {
+    _enable_nss_mdns
+    local s
+    for s in ananicy-cpp systemd-resolved; do
+        if systemctl is-active --quiet "$s" 2>/dev/null; then
+            systemctl restart "$s" || true
+        fi
+    done
+}

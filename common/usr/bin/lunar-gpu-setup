@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# lunar-gpu-setup - install the right graphics drivers for this PC.
+#
+#   lunar-gpu-setup                 detect and install (choice: auto)
+#   lunar-gpu-setup --choice mesa   open source drivers only (nouveau/NVK on NVIDIA)
+#   lunar-gpu-setup --print         show what would be installed, change nothing
+#
+# Choice "auto" (Wayland-capable drivers only):
+#   NVIDIA Turing (GTX 16xx / RTX 20xx) and newer -> nvidia-open-dkms (current driver)
+#   NVIDIA Maxwell, Pascal, Volta (GTX 750 - 10xx) -> nvidia-580xx-dkms (legacy, [lunar] repo)
+#   NVIDIA Kepler and older                         -> nouveau (Mesa); NVIDIA's old
+#                                                      drivers have no Wayland support
+#   AMD, Intel                                      -> Mesa (RADV, ANV)
+#   NVIDIA + another GPU (laptops)                  -> both, plus nvidia-prime
+#
+# The NVIDIA generation is read from the PCI device ID: NVIDIA numbers its
+# chips in order, Maxwell starts at 0x1340 and Turing at 0x1e00.
+# Run it again after changing graphics cards; it swaps the drivers.
+
+set -euo pipefail
+
+choice=auto
+print_only=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --choice) choice="${2:-}"; shift ;;
+        --choice=*) choice="${1#*=}" ;;
+        --print|-n) print_only=1 ;;
+        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "lunar-gpu-setup: unknown option $1" >&2; exit 2 ;;
+    esac
+    shift
+done
+[[ "$choice" == auto || "$choice" == mesa ]] || { echo "lunar-gpu-setup: --choice must be auto or mesa" >&2; exit 2; }
+
+log() { echo "==> lunar-gpu-setup: $*"; }
+
+command -v lspci >/dev/null || { echo "lunar-gpu-setup: lspci not found (pacman -S pciutils)" >&2; exit 1; }
+
+# display controllers: class 0300 (VGA), 0302 (3D), 0380 (other)
+has_amd=0 has_intel=0 nv_class=""   # nv_class: current | legacy | nouveau
+while read -r _slot class ids _; do
+    class="${class%:}"
+    [[ "$class" == 0300 || "$class" == 0302 || "$class" == 0380 ]] || continue
+    vendor="${ids%%:*}" device="${ids##*:}"
+    case "$vendor" in
+        1002) has_amd=1 ;;
+        8086) has_intel=1 ;;
+        10de)
+            dev=$((16#$device))
+            if   (( dev >= 0x1e00 )); then c=current
+            elif (( dev >= 0x1340 )); then c=legacy
+            else c=nouveau
+            fi
+            log "NVIDIA GPU 10de:$device -> $c"
+            # several NVIDIA cards: the oldest decides (one driver serves all)
+            case "$nv_class/$c" in
+                /*|current/legacy|current/nouveau|legacy/nouveau) nv_class="$c" ;;
+            esac
+            ;;
+    esac
+done < <(lspci -n)
+
+[[ "$choice" == mesa && -n "$nv_class" ]] && nv_class=nouveau
+
+mesa=(mesa lib32-mesa vulkan-mesa-layers lib32-vulkan-mesa-layers)
+(( has_amd ))   && mesa+=(vulkan-radeon lib32-vulkan-radeon)
+(( has_intel )) && mesa+=(vulkan-intel lib32-vulkan-intel intel-media-driver)
+
+nvidia_current=(nvidia-open-dkms nvidia-utils lib32-nvidia-utils nvidia-settings)
+nvidia_legacy=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils)
+
+install=("${mesa[@]}")
+remove=()
+case "$nv_class" in
+    current) install+=("${nvidia_current[@]}"); remove+=("${nvidia_legacy[@]}") ;;
+    legacy)  install+=("${nvidia_legacy[@]}");  remove+=("${nvidia_current[@]}") ;;
+    nouveau) install+=(vulkan-nouveau lib32-vulkan-nouveau)
+             remove+=("${nvidia_current[@]}" "${nvidia_legacy[@]}" nvidia-prime) ;;
+    "")      remove+=("${nvidia_current[@]}" "${nvidia_legacy[@]}" nvidia-prime) ;;
+esac
+if [[ "$nv_class" == current || "$nv_class" == legacy ]] && (( has_amd || has_intel )); then
+    install+=(nvidia-prime)
+fi
+# DKMS needs the headers of every installed kernel
+if [[ "$nv_class" == current || "$nv_class" == legacy ]]; then
+    for k in /usr/lib/modules/*/pkgbase; do
+        [[ -r "$k" ]] && install+=("$(<"$k")-headers")
+    done
+fi
+
+installed_remove=()
+for p in "${remove[@]}"; do
+    pacman -Qq "$p" >/dev/null 2>&1 && installed_remove+=("$p")
+done
+
+log "install: ${install[*]}"
+[[ ${#installed_remove[@]} -gt 0 ]] && log "remove:  ${installed_remove[*]}"
+[[ "$print_only" == 1 ]] && exit 0
+
+[[ "$(id -u)" -eq 0 ]] || { echo "lunar-gpu-setup: run as root (sudo)" >&2; exit 1; }
+
+if [[ ${#installed_remove[@]} -gt 0 ]]; then
+    pacman -Rdd --noconfirm "${installed_remove[@]}"
+fi
+pacman -S --needed --noconfirm "${install[@]}"
+log "done - reboot to use the new drivers"

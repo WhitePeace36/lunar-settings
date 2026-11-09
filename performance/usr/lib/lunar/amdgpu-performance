@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# amdgpu-performance - Lunar performance profile for AMD GPUs (amdgpu driver)
+#
+#   apply  : power limit -> the card's maximum (power1_cap_max)
+#            power profile -> 3D_FULL_SCREEN
+#            performance level -> manual, memory clock pinned to its top state
+#   reset  : back to driver defaults (auto level, default power limit)
+#
+# Raising the power limit within the card's own range needs no boot option.
+# The memory clock stays at maximum even at idle; that costs some idle power
+# (tens of watts on big cards) in exchange for no memory reclocking stutter.
+#
+# Set LUNAR_AMDGPU_SKIP=1 in /etc/lunar/amdgpu-performance.conf to disable
+# this without switching profiles.
+
+set -u
+
+CONF=/etc/lunar/amdgpu-performance.conf
+LUNAR_AMDGPU_SKIP=0
+# shellcheck source=/dev/null
+[ -r "$CONF" ] && . "$CONF"
+
+log() { echo "lunar-amdgpu: $*"; }
+
+write() {  # write <value> <file>
+    local value="$1" file="$2"
+    [ -w "$file" ] || { log "skip ${file#/sys/} (not writable)"; return 1; }
+    if ! printf '%s\n' "$value" > "$file" 2>/dev/null; then
+        log "failed to write '$value' to ${file#/sys/}"
+        return 1
+    fi
+}
+
+amd_cards() {
+    local dev drv
+    for dev in /sys/class/drm/card[0-9]*/device; do
+        [ -e "$dev/driver" ] || continue
+        drv="$(basename "$(readlink -f "$dev/driver")")"
+        [ "$drv" = amdgpu ] && readlink -f "$dev"
+    done | sort -u
+}
+
+hwmon_of() {
+    local h
+    for h in "$1"/hwmon/hwmon*; do
+        [ -e "$h/power1_cap" ] && { echo "$h"; return 0; }
+    done
+    return 1
+}
+
+apply_card() {
+    local dev="$1" hwmon max idx top
+    log "applying to ${dev##*/}"
+
+    if hwmon="$(hwmon_of "$dev")" && [ -r "$hwmon/power1_cap_max" ]; then
+        max="$(cat "$hwmon/power1_cap_max")"
+        [ "${max:-0}" -gt 0 ] && write "$max" "$hwmon/power1_cap" \
+            && log "  power limit $((max / 1000000)) W"
+    fi
+
+    if [ -r "$dev/pp_power_profile_mode" ]; then
+        idx="$(sed -nE 's/^[[:space:]]*([0-9]+)[[:space:]]+3D_FULL_SCREEN.*/\1/p' \
+               "$dev/pp_power_profile_mode" | head -n1)"
+        [ -n "$idx" ] && write "$idx" "$dev/pp_power_profile_mode" \
+            && log "  power profile 3D_FULL_SCREEN"
+    fi
+
+    if [ -r "$dev/pp_dpm_mclk" ] && write manual "$dev/power_dpm_force_performance_level"; then
+        top="$(sed -nE 's/^([0-9]+):.*/\1/p' "$dev/pp_dpm_mclk" | sort -n | tail -n1)"
+        [ -n "$top" ] && write "$top" "$dev/pp_dpm_mclk" \
+            && log "  memory clock pinned to state $top"
+    fi
+}
+
+reset_card() {
+    local dev="$1" hwmon def
+    log "resetting ${dev##*/}"
+    write auto "$dev/power_dpm_force_performance_level"
+    if hwmon="$(hwmon_of "$dev")" && [ -r "$hwmon/power1_cap_default" ]; then
+        def="$(cat "$hwmon/power1_cap_default")"
+        [ "${def:-0}" -gt 0 ] && write "$def" "$hwmon/power1_cap"
+    fi
+    if [ -r "$dev/pp_power_profile_mode" ]; then
+        local idx
+        idx="$(sed -nE 's/^[[:space:]]*([0-9]+)[[:space:]]+BOOTUP_DEFAULT.*/\1/p' \
+               "$dev/pp_power_profile_mode" | head -n1)"
+        [ -n "$idx" ] && write "$idx" "$dev/pp_power_profile_mode"
+    fi
+}
+
+main() {
+    local action="${1:-apply}" dev found=0
+    if [ "$action" = apply ] && [ "$LUNAR_AMDGPU_SKIP" = 1 ]; then
+        log "disabled in $CONF"
+        exit 0
+    fi
+    while read -r dev; do
+        [ -n "$dev" ] || continue
+        found=1
+        case "$action" in
+            apply) apply_card "$dev" ;;
+            reset) reset_card "$dev" ;;
+            *) echo "usage: $0 apply|reset" >&2; exit 2 ;;
+        esac
+    done < <(amd_cards)
+    [ "$found" = 1 ] || log "no amdgpu card found"
+    exit 0
+}
+
+main "$@"

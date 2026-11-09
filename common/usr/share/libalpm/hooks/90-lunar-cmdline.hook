@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/lib/lunar/cmdline.d/*
+
+[Action]
+Description = Applying Lunar kernel parameters to the boot loader...
+When = PostTransaction
+Exec = /usr/bin/lunar-update-cmdline

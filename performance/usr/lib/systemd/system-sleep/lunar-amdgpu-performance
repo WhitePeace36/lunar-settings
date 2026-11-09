@@ -1,0 +1,11 @@
+#!/bin/sh
+# Re-apply the AMD GPU performance settings after resume; the driver may
+# fall back to automatic clocks when the card is powered back up.
+case "$1/$2" in
+    post/*)
+        if systemctl -q is-active lunar-amdgpu-performance.service 2>/dev/null; then
+            /usr/lib/lunar/amdgpu-performance apply
+        fi
+        ;;
+esac
+exit 0

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# lunar-update-cmdline - build the kernel command line and apply it.
+#
+#   /etc/kernel/cmdline = /etc/lunar/cmdline-root
+#                       + /usr/lib/lunar/cmdline.d/*.conf (from the Lunar packages)
+#                       + /etc/lunar/cmdline.d/*.conf     (your additions)
+#
+# /etc/lunar/cmdline-root holds what the installer found for this machine
+# (root=, LUKS, Btrfs subvolume, resume=, quiet splash rw). A file in
+# /etc/lunar/cmdline.d with the same name as one in /usr/lib/lunar/cmdline.d
+# replaces it, so an empty /etc/lunar/cmdline.d/50-tuning.conf disables the
+# tuning profile's parameters. Afterwards the systemd-boot entries are
+# rewritten (lunar-sdboot-update).
+#
+# Options:
+#   --no-regen  only write /etc/kernel/cmdline
+#   --print     print the collected Lunar parameters and exit
+
+set -euo pipefail
+
+ROOT_FILE=/etc/lunar/cmdline-root
+SYS_DIR=/usr/lib/lunar/cmdline.d
+ETC_DIR=/etc/lunar/cmdline.d
+OUT=/etc/kernel/cmdline
+
+regen=1
+print_only=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-regen) regen=0 ;;
+        --print) print_only=1 ;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "lunar-update-cmdline: unknown option '$arg'" >&2; exit 2 ;;
+    esac
+done
+
+# words from files, comments stripped
+words_of() { sed -e 's/#.*$//' "$@" | tr -s '[:space:]' '\n' | sed '/^$/d'; }
+
+collect_params() {
+    local -A files=()
+    local f name
+    shopt -s nullglob
+    for f in "$SYS_DIR"/*.conf; do files["${f##*/}"]="$f"; done
+    for f in "$ETC_DIR"/*.conf; do files["${f##*/}"]="$f"; done
+    shopt -u nullglob
+    while read -r name; do
+        [[ -n "$name" ]] && words_of "${files[$name]}"
+    done < <(printf '%s\n' "${!files[@]}" | sort)
+}
+
+join_unique() {  # first occurrence wins
+    awk '!seen[$0]++' | paste -sd ' '
+}
+
+params="$(collect_params | join_unique)"
+if [[ "$print_only" == 1 ]]; then
+    echo "$params"
+    exit 0
+fi
+
+[[ "$(id -u)" -eq 0 ]] || { echo "lunar-update-cmdline: must be run as root" >&2; exit 1; }
+
+if [[ ! -s "$ROOT_FILE" ]]; then
+    echo "lunar-update-cmdline: $ROOT_FILE is missing; it should hold the root= options" >&2
+    echo "  of this machine (the installer writes it). Not changing $OUT." >&2
+    exit 1
+fi
+
+new="$({ words_of "$ROOT_FILE"; collect_params; } | join_unique)"
+mkdir -p "${OUT%/*}"
+if [[ "$(cat "$OUT" 2>/dev/null)" != "$new" ]]; then
+    echo "$new" > "$OUT"
+    echo "==> lunar: kernel command line: $new"
+    echo "==> lunar: takes effect after a reboot"
+fi
+
+if [[ "$regen" == 1 ]]; then
+    /usr/bin/lunar-sdboot-update
+fi
