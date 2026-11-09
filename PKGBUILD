@@ -23,11 +23,11 @@
 
 pkgbase=lunar-settings
 pkgname=('lunar-settings' 'lunar-tuning-performance' 'lunar-tuning-battery')
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 arch=('any')
 url='https://github.com/WhitePeace36/lunar-settings'
-license=('GPL-3.0-or-later')
+license=('GPL-2.0-only')
 
 # copy one folder into the package, keep the modes of the files in git
 _install_tree() {

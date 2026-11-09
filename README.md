@@ -24,7 +24,7 @@ picks one, and you switch with `sudo pacman -S lunar-tuning-battery`
 | Setting | Both profiles (`common/`) | Per profile (`performance/`, `battery/`) |
 |---|---|---|
 | sysctl | `usr/lib/sysctl.d/70-lunar.conf` | `usr/lib/sysctl.d/75-lunar-tuning.conf` |
-| tmpfiles (THP, zswap, MGLRU, khugepaged) | `usr/lib/tmpfiles.d/lunar-thp.conf` | `usr/lib/tmpfiles.d/lunar-tuning.conf` (performance only) |
+| tmpfiles (THP, zswap, MGLRU, khugepaged) | `usr/lib/tmpfiles.d/lunar-thp.conf` | `usr/lib/tmpfiles.d/lunar-tuning.conf` |
 | Kernel command line | `usr/lib/lunar/cmdline.d/10-common.conf` | `usr/lib/lunar/cmdline.d/50-tuning.conf` |
 | Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` | - |
 | Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` | - |
@@ -50,6 +50,17 @@ would try to install both profiles, which conflict). Outside Lunar,
 `lunar-settings` needs the other Lunar packages it depends on
 (`ananicy-cpp-lunar`, `lunar-ananicy-rules`, `elara`) from the `[lunar]` repo.
 
+## The profiles and linux-lunar
+
+linux-lunar compiles in memory defaults that trade background work for fewer
+stalls (`vm.defrag_mode=1`, `vm.watermark_scale_factor=500`,
+`vm.compaction_proactiveness=50`, khugepaged scanning 8x as fast, writeback
+every second). The performance profile keeps them. The battery profile sets
+them back towards upstream (`75-lunar-tuning.conf`, `lunar-tuning.conf`), so
+kswapd, kcompactd and khugepaged wake up less. linux-lunar's patches
+themselves don't add background work: they only change who does the work
+(kswapd/kcompactd instead of the program that allocates).
+
 ## Releasing a change
 
 1. Edit the file(s). A new file just goes into the right folder at its
@@ -67,4 +78,4 @@ changes take effect at the next boot.
 
 ## License
 
-GPL-3.0-or-later, see `LICENSE`.
+GPL-2.0-only, see `LICENSE`.
