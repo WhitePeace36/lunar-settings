@@ -13,7 +13,7 @@ on Arch Linux with the linux-lunar kernel), as one package.
 |---|---|
 | sysctl | `usr/lib/sysctl.d/70-lunar.conf` |
 | tmpfiles (THP, khugepaged, zswap, MGLRU) | `usr/lib/tmpfiles.d/lunar-thp.conf` |
-| Kernel command line | `usr/lib/lunar/cmdline.d/10-lunar.conf` |
+| Kernel command line | `usr/lib/lunar/cmdline.d/10-lunar.conf`, `etc/lunar/cmdline.conf` |
 | Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` |
 | Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` |
 | zram | `usr/lib/systemd/zram-generator.conf` |
@@ -25,9 +25,27 @@ on Arch Linux with the linux-lunar kernel), as one package.
 | Services enabled on install | `lunar-settings.install` |
 
 Users override any of these with their own file in `/etc`, which pacman never
-touches: `/etc/sysctl.d/99-local.conf`, a file with the same name in
-`/etc/tmpfiles.d/`, or a copy of `10-lunar.conf` in `/etc/lunar/cmdline.d/`
-(then `sudo lunar-update-cmdline`).
+touches: `/etc/sysctl.d/99-local.conf`, or a file with the same name in
+`/etc/tmpfiles.d/`.
+
+## Kernel command line
+
+`lunar-update-cmdline` writes `/etc/kernel/cmdline` and the systemd-boot
+entries from, in this order:
+
+1. `/etc/lunar/cmdline-root`: this machine's root options (written by the
+   installer)
+2. `/usr/lib/lunar/cmdline.d/*.conf`: Lunar's parameters
+3. `/etc/lunar/cmdline.d/*.conf`: the user's parameters
+
+Nothing is merged or removed. When a parameter appears twice, the kernel uses
+the last one, so the user's parameters always win. With `LUNAR_DEFAULTS=no`
+in `/etc/lunar/cmdline.conf`, step 2 is left out: only the root options and
+the user's files are used.
+
+A pacman hook runs it after every kernel install, update or removal and
+after lunar-settings updates; `sudo lunar-update-cmdline` applies changes
+right away. `lunar-update-cmdline --print` shows the result.
 
 The settings are tuned for desktops: CPU idle limited to C1, no PCIe power
 saving, performance governor, disks and sound chip never powered down. On a
@@ -53,7 +71,7 @@ distribution may ship files at the same paths (for example
 ## Releasing a change
 
 1. Edit the file(s). A new file just goes into `files/` at its final path.
-2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.1 -> 2.1.0), or `pkgrel` for a
+2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.2 -> 2.1.0), or `pkgrel` for a
    small fix. Commit and push.
 3. In the `LunarOs` repo: set `_commit` in `packages/lunar-settings/prepare.sh`
    to the new commit, then `scripts/build-packages.sh lunar-settings` and

@@ -9,7 +9,8 @@
 # (written by lunar-update-cmdline). Entries of removed kernels are deleted.
 # linux-lunar is the default entry; another kernel only if it is missing.
 #
-# Runs from a pacman hook after kernel installs, upgrades and removals.
+# Run by lunar-update-cmdline, which a pacman hook (95-lunar-boot.hook) starts
+# after kernel installs, upgrades and removals.
 # Does nothing on systems that don't boot with systemd-boot or aren't Lunar
 # installs (no /etc/lunar/cmdline-root).
 

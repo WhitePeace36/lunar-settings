@@ -1,0 +1,18 @@
+# Rebuilds /etc/kernel/cmdline (installer root options + Lunar's parameters +
+# /etc/lunar/cmdline.d) and then the systemd-boot entries, whenever a kernel
+# or Lunar's parameter files are installed, upgraded or removed. Runs after
+# mkinitcpio's hook (90-mkinitcpio-install), which puts the kernel images
+# into /boot.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/lib/lunar/cmdline.d/*
+
+[Action]
+Description = Updating the kernel command line and systemd-boot entries...
+When = PostTransaction
+Exec = /usr/bin/lunar-update-cmdline

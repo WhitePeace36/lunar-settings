@@ -1,0 +1,11 @@
+Your own kernel parameters go into *.conf files in this folder, for example
+50-local.conf with:
+
+    amdgpu.ppfeaturemask=0xffffffff
+
+They are added after Lunar's parameters, so they win when a parameter
+appears twice. To leave out Lunar's parameters entirely, set
+LUNAR_DEFAULTS=no in /etc/lunar/cmdline.conf.
+
+Apply with:  sudo lunar-update-cmdline   (then reboot)
+A kernel update applies them too.
