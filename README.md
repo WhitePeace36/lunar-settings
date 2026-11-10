@@ -71,7 +71,7 @@ distribution may ship files at the same paths (for example
 ## Releasing a change
 
 1. Edit the file(s). A new file just goes into `files/` at its final path.
-2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.2 -> 2.1.0), or `pkgrel` for a
+2. Raise `pkgver` in `PKGBUILD` (e.g. 2.0.3 -> 2.1.0), or `pkgrel` for a
    small fix. Commit and push.
 3. In the `LunarOs` repo: set `_commit` in `packages/lunar-settings/prepare.sh`
    to the new commit, then `scripts/build-packages.sh lunar-settings` and

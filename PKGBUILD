@@ -16,7 +16,7 @@
 #   scripts/build-packages.sh lunar-settings && scripts/publish.sh
 
 pkgname=lunar-settings
-pkgver=2.0.2
+pkgver=2.0.3
 pkgrel=1
 pkgdesc='Lunar - system settings (sysctl, THP, zram, limits, kernel parameters, mDNS, boot entries, GPU setup)'
 arch=('any')
