@@ -42,8 +42,6 @@ post_install() {
 post_upgrade() {
     _enable_nss_mdns
     systemctl daemon-reload >/dev/null 2>&1 || true
-    # lunar-amdgpu-performance came with lunar-tuning-performance before 2.0.0
-    systemctl enable lunar-amdgpu-performance.service >/dev/null 2>&1 || true
     local s
     for s in ananicy-cpp systemd-resolved; do
         if systemctl is-active --quiet "$s" 2>/dev/null; then

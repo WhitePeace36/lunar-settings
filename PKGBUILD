@@ -16,7 +16,7 @@
 #   scripts/build-packages.sh lunar-settings && scripts/publish.sh
 
 pkgname=lunar-settings
-pkgver=2.0.4
+pkgver=2.0.5
 pkgrel=1
 pkgdesc='Lunar - system settings (sysctl, THP, zram, limits, kernel parameters, mDNS, boot entries, GPU setup)'
 arch=('any')
@@ -42,10 +42,6 @@ optdepends=('ananicy-cpp-lunar: ananicy-cpp build Lunar enables (or ananicy-cpp)
             'networkmanager: DNS through systemd-resolved'
             'ufw: the LocalSend firewall rule'
             'power-profiles-daemon: start in the "performance" power profile')
-# the two tuning profiles of 1.x are part of this package now
-provides=('lunar-tuning')
-conflicts=('lunar-tuning' 'lunar-tuning-performance' 'lunar-tuning-battery')
-replaces=('lunar-tuning-performance' 'lunar-tuning-battery')
 backup=('etc/security/limits.d/90-lunar.conf'
         'etc/lunar/cmdline.conf')
 install=lunar-settings.install
