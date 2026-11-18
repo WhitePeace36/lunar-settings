@@ -7,7 +7,11 @@
 # pointing at the files mkinitcpio puts in /boot (vmlinuz-<pkgbase>,
 # initramfs-<pkgbase>.img), with the options from /etc/kernel/cmdline
 # (written by lunar-update-cmdline). Entries of removed kernels are deleted.
-# linux-lunar is the default entry; another kernel only if it is missing.
+# The default entry is the first installed kernel of DEFAULT_KERNELS
+# (linux-lunar-v3, then linux-lunar), another kernel only if both are missing.
+# A default set by hand in loader.conf is kept; one this script chose itself
+# (recorded in a comment next to it) moves to a more preferred kernel when
+# that gets installed, e.g. linux-lunar -> linux-lunar-v3.
 #
 # Run by lunar-update-cmdline, which a pacman hook (95-lunar-boot.hook) starts
 # after kernel installs, upgrades and removals.
@@ -17,7 +21,8 @@
 set -euo pipefail
 
 CMDLINE=/etc/kernel/cmdline
-DEFAULT_KERNEL=linux-lunar
+DEFAULT_KERNELS=(linux-lunar-v3 linux-lunar)
+AUTO_MARK="# lunar-sdboot-update chose the default entry:"
 
 log() { echo "==> lunar-sdboot: $*"; }
 
@@ -71,8 +76,11 @@ for pkgbase_file in /usr/lib/modules/*/pkgbase; do
         log "skipping $pkgbase: /boot/vmlinuz-$pkgbase or its initramfs is missing"
         continue
     }
-    # linux-lunar sorts first in the menu
-    [[ "$pkgbase" == "$DEFAULT_KERNEL" ]] && sort="lunar-1-$pkgbase" || sort="lunar-2-$pkgbase"
+    # the DEFAULT_KERNELS sort first in the menu, in their order
+    sort="lunar-2-$pkgbase"
+    for i in "${!DEFAULT_KERNELS[@]}"; do
+        [[ "$pkgbase" == "${DEFAULT_KERNELS[$i]}" ]] && sort="lunar-1-$i-$pkgbase"
+    done
 
     f="$entries/lunar-$pkgbase.conf"
     write_entry "$f" "Lunar ($pkgbase)" "$kver" "$pkgbase" "initramfs-$pkgbase.img" "$sort"
@@ -95,23 +103,34 @@ done
 
 # default entry: keep a user's choice unless it points at a removed lunar entry
 default=""
-[[ -f "$loader" ]] && default="$(sed -n 's/^default[[:space:]]\+//p' "$loader" | tail -n1)"
-if [[ -z "$default" || ( "$default" == lunar-* && ! -f "$entries/$default" ) ]]; then
-    if [[ -f "$entries/lunar-$DEFAULT_KERNEL.conf" ]]; then
-        default="lunar-$DEFAULT_KERNEL.conf"
-    else
-        default=""
-        for f in "$entries"/lunar-*.conf; do
-            [[ "$f" == *-fallback.conf ]] && continue
-            default="${f##*/}"
-            break
-        done
+auto=""
+if [[ -f "$loader" ]]; then
+    default="$(sed -n 's/^default[[:space:]]\+//p' "$loader" | tail -n1)"
+    auto="$(sed -n "s/^${AUTO_MARK}[[:space:]]*//p" "$loader" | tail -n1)"
+    # versions before 2.0.7 wrote linux-lunar's entry without the comment
+    grep -qF "$AUTO_MARK" "$loader" || auto="lunar-linux-lunar.conf"
+fi
+preferred=""
+for k in "${DEFAULT_KERNELS[@]}"; do
+    if [[ -f "$entries/lunar-$k.conf" ]]; then
+        preferred="lunar-$k.conf"
+        break
     fi
-    if [[ -n "$default" ]]; then
+done
+if [[ -z "$preferred" ]]; then
+    for f in "$entries"/lunar-*.conf; do
+        [[ "$f" == *-fallback.conf ]] && continue
+        preferred="${f##*/}"
+        break
+    done
+fi
+if [[ -z "$default" || ( "$default" == lunar-* && ! -f "$entries/$default" ) \
+      || ( "$default" == "$auto" && -n "$preferred" && "$default" != "$preferred" ) ]]; then
+    if [[ -n "$preferred" ]]; then
         touch "$loader"
-        sed -i '/^default[[:space:]]/d' "$loader"
-        echo "default $default" >> "$loader"
-        log "default entry: $default"
+        sed -i -e '/^default[[:space:]]/d' -e "/^${AUTO_MARK}/d" "$loader"
+        printf '%s %s\ndefault %s\n' "$AUTO_MARK" "$preferred" "$preferred" >> "$loader"
+        log "default entry: $preferred"
     fi
 fi
 grep -q '^timeout[[:space:]]' "$loader" 2>/dev/null || echo "timeout 3" >> "$loader"
