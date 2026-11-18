@@ -9,9 +9,11 @@
 # (written by lunar-update-cmdline). Entries of removed kernels are deleted.
 # The default entry is the first installed kernel of DEFAULT_KERNELS
 # (linux-lunar-v3, then linux-lunar), another kernel only if both are missing.
-# A default set by hand in loader.conf is kept; one this script chose itself
-# (recorded in a comment next to it) moves to a more preferred kernel when
-# that gets installed, e.g. linux-lunar -> linux-lunar-v3.
+# A default set by hand in loader.conf is kept (also a glob such as
+# "lunar-linux-lts*"); one this script chose itself (recorded in STATE)
+# moves to a more preferred kernel when that gets installed, e.g.
+# linux-lunar -> linux-lunar-v3. The boot menu's "d" key / bootctl
+# set-default write an EFI variable, which this script never touches.
 #
 # Run by lunar-update-cmdline, which a pacman hook (95-lunar-boot.hook) starts
 # after kernel installs, upgrades and removals.
@@ -22,7 +24,7 @@ set -euo pipefail
 
 CMDLINE=/etc/kernel/cmdline
 DEFAULT_KERNELS=(linux-lunar-v3 linux-lunar)
-AUTO_MARK="# lunar-sdboot-update chose the default entry:"
+STATE=/var/lib/lunar/sdboot-default   # the default entry this script last chose
 
 log() { echo "==> lunar-sdboot: $*"; }
 
@@ -103,12 +105,20 @@ done
 
 # default entry: keep a user's choice unless it points at a removed lunar entry
 default=""
-auto=""
-if [[ -f "$loader" ]]; then
-    default="$(sed -n 's/^default[[:space:]]\+//p' "$loader" | tail -n1)"
-    auto="$(sed -n "s/^${AUTO_MARK}[[:space:]]*//p" "$loader" | tail -n1)"
-    # versions before 2.0.7 wrote linux-lunar's entry without the comment
-    grep -qF "$AUTO_MARK" "$loader" || auto="lunar-linux-lunar.conf"
+[[ -f "$loader" ]] && default="$(sed -n 's/^default[[:space:]]\+//p' "$loader" | tail -n1)"
+if [[ -f "$STATE" ]]; then
+    auto="$(<"$STATE")"
+else
+    # first run after 2.0.6, which wrote linux-lunar's entry without recording it
+    auto="lunar-linux-lunar.conf"
+fi
+# does the default (an entry name or a glob) still match an entry?
+default_ok=0
+if [[ -n "$default" ]]; then
+    for f in "$entries"/$default; do
+        [[ -f "$f" ]] && default_ok=1 && break
+    done
+    [[ "$default" == lunar-* ]] || default_ok=1   # not ours: never replaced
 fi
 preferred=""
 for k in "${DEFAULT_KERNELS[@]}"; do
@@ -124,14 +134,17 @@ if [[ -z "$preferred" ]]; then
         break
     done
 fi
-if [[ -z "$default" || ( "$default" == lunar-* && ! -f "$entries/$default" ) \
-      || ( "$default" == "$auto" && -n "$preferred" && "$default" != "$preferred" ) ]]; then
-    if [[ -n "$preferred" ]]; then
-        touch "$loader"
-        sed -i -e '/^default[[:space:]]/d' -e "/^${AUTO_MARK}/d" "$loader"
-        printf '%s %s\ndefault %s\n' "$AUTO_MARK" "$preferred" "$preferred" >> "$loader"
-        log "default entry: $preferred"
-    fi
+if [[ -n "$preferred" ]] && (( ! default_ok )) \
+   || [[ -n "$preferred" && "$default" == "$auto" && "$default" != "$preferred" ]]; then
+    touch "$loader"
+    sed -i '/^default[[:space:]]/d' "$loader"
+    echo "default $preferred" >> "$loader"
+    log "default entry: $preferred"
+    auto="$preferred"
+elif [[ "$default" != "$auto" ]]; then
+    auto=""   # set by hand: from now on it is the user's
 fi
+mkdir -p "${STATE%/*}"
+[[ -f "$STATE" && "$(<"$STATE")" == "$auto" ]] || printf '%s\n' "$auto" > "$STATE"
 grep -q '^timeout[[:space:]]' "$loader" 2>/dev/null || echo "timeout 3" >> "$loader"
 exit 0

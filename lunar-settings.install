@@ -57,5 +57,5 @@ pre_remove() {
 }
 
 post_remove() {
-    rm -f var/lib/lunar/ppd-performance-set
+    rm -f var/lib/lunar/ppd-performance-set var/lib/lunar/sdboot-default
 }
