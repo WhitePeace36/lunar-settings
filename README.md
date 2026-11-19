@@ -17,7 +17,7 @@ on Arch Linux with the linux-lunar kernel), as one package.
 | Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` |
 | Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` |
 | zram | `usr/lib/systemd/zram-generator.conf` |
-| udev: I/O scheduler, SATA/HDD power, AMD GPU | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules`, `60-lunar-disk-performance.rules`, `90-lunar-amdgpu-performance.rules` |
+| udev: I/O scheduler, SATA/HDD power, AMD GPU | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules`, `70-lunar-disk-performance.rules`, `90-lunar-amdgpu-performance.rules` |
 | AMD GPU max power limit + fixed VRAM clock | `usr/lib/lunar/amdgpu-performance`, `lunar-amdgpu-performance.service` |
 | Kernel modules | `usr/lib/modprobe.d/`, `usr/lib/modules-load.d/` |
 | Boot entries, kernel command line tools | `usr/bin/lunar-sdboot-update`, `usr/bin/lunar-update-cmdline`, `usr/share/libalpm/hooks/` |

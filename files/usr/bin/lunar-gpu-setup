@@ -12,6 +12,9 @@
 #                                                      drivers have no Wayland support
 #   AMD, Intel                                      -> Mesa (RADV, ANV)
 #   NVIDIA + another GPU (laptops)                  -> both, plus nvidia-prime
+#   none of these (virtual machines, server graphics)
+#                                                   -> Mesa's software Vulkan driver
+#                                                      (lavapipe), on virtio-gpu also Venus
 #
 # The NVIDIA generation is read from the PCI device ID: NVIDIA numbers its
 # chips in order, Maxwell starts at 0x1340 and Turing at 0x1e00.
@@ -26,7 +29,7 @@ while [[ $# -gt 0 ]]; do
         --choice) choice="${2:-}"; shift ;;
         --choice=*) choice="${1#*=}" ;;
         --print|-n) print_only=1 ;;
-        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "lunar-gpu-setup: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -38,7 +41,7 @@ log() { echo "==> lunar-gpu-setup: $*"; }
 command -v lspci >/dev/null || { echo "lunar-gpu-setup: lspci not found (pacman -S pciutils)" >&2; exit 1; }
 
 # display controllers: class 0300 (VGA), 0302 (3D), 0380 (other)
-has_amd=0 has_intel=0 nv_class=""   # nv_class: current | legacy | nouveau
+has_amd=0 has_intel=0 has_virtio=0 nv_class=""   # nv_class: current | legacy | nouveau
 while read -r _slot class ids _; do
     class="${class%:}"
     [[ "$class" == 0300 || "$class" == 0302 || "$class" == 0380 ]] || continue
@@ -46,6 +49,7 @@ while read -r _slot class ids _; do
     case "$vendor" in
         1002) has_amd=1 ;;
         8086) has_intel=1 ;;
+        1af4) has_virtio=1 ;;   # virtio-gpu (QEMU/KVM)
         10de)
             dev=$((16#$device))
             if   (( dev >= 0x1e00 )); then c=current
@@ -66,6 +70,16 @@ done < <(lspci -n)
 mesa=(mesa lib32-mesa vulkan-mesa-layers lib32-vulkan-mesa-layers)
 (( has_amd ))   && mesa+=(vulkan-radeon lib32-vulkan-radeon)
 (( has_intel )) && mesa+=(vulkan-intel lib32-vulkan-intel intel-media-driver)
+# No AMD, Intel or NVIDIA GPU (virtual machines, server graphics): no
+# hardware Vulkan driver fits. Steam needs a 32-bit one, and without one
+# pacman picks the first provider itself - NVIDIA's legacy userspace from
+# [lunar], which also blacklists nouveau. Mesa's software driver works
+# everywhere; virtio-gpu additionally gets Venus (needs host support).
+if (( ! has_amd && ! has_intel )) && [[ -z "$nv_class" ]]; then
+    (( has_virtio )) && mesa+=(vulkan-virtio lib32-vulkan-virtio)
+    mesa+=(vulkan-swrast lib32-vulkan-swrast)
+    log "no AMD, Intel or NVIDIA GPU: software Vulkan (lavapipe)"
+fi
 
 nvidia_current=(nvidia-open-dkms nvidia-utils lib32-nvidia-utils nvidia-settings)
 nvidia_legacy=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils)
@@ -89,9 +103,13 @@ if [[ "$nv_class" == current || "$nv_class" == legacy ]]; then
     done
 fi
 
+# Exact package names only: "pacman -Qq nvidia-utils" also succeeds when
+# nvidia-580xx-utils (which provides nvidia-utils) is installed, and
+# "pacman -R nvidia-utils" then fails with "target not found".
 installed_remove=()
+installed_now=" $(pacman -Qq | tr '\n' ' ')"
 for p in "${remove[@]}"; do
-    pacman -Qq "$p" >/dev/null 2>&1 && installed_remove+=("$p")
+    [[ "$installed_now" == *" $p "* ]] && installed_remove+=("$p")
 done
 
 log "install: ${install[*]}"

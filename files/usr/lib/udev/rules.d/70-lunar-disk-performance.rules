@@ -1,4 +1,6 @@
 # Lunar: disks never doze off
+# The file name must sort after 60-persistent-storage.rules: that file sets
+# ID_BUS, which the hard disk rule below checks (as 60-lunar-... it never ran).
 # SATA links stay at full power (no link power management delays)
 ACTION=="add", SUBSYSTEM=="scsi_host", KERNEL=="host*", ATTR{link_power_management_policy}=="?*", ATTR{link_power_management_policy}="max_performance"
 # Internal hard disks: no spin-down, no aggressive power management (-B 254 -S 0)
