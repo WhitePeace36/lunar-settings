@@ -1,4 +1,4 @@
-SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update lunar-amdgpu-performance)
+SERVICES=(ananicy-cpp elara systemd-resolved avahi-daemon systemd-boot-update lunar-gpu-performance)
 
 # Resolve .local names (printers, other machines) through Avahi:
 # insert "mdns_minimal [NOTFOUND=return]" in front of "resolve" on the hosts line.
@@ -39,9 +39,26 @@ post_install() {
     echo "==> Lunar settings installed. Reboot to apply all of them."
 }
 
+# 2.0.10 renamed lunar-amdgpu-performance.service to lunar-gpu-performance
+# (it now covers NVIDIA too). Stop the old service while its script still
+# exists (pre_upgrade); afterwards its enable link is left dangling: carry
+# the enabled state over and start the new service, so the settings and
+# the resume hook keep working without a reboot.
+pre_upgrade() {
+    systemctl stop lunar-amdgpu-performance.service >/dev/null 2>&1 || true
+}
+
+_migrate_gpu_service() {
+    local old=etc/systemd/system/multi-user.target.wants/lunar-amdgpu-performance.service
+    [ -L "$old" ] || return 0
+    rm -f "$old"
+    systemctl enable --now lunar-gpu-performance.service >/dev/null 2>&1 || true
+}
+
 post_upgrade() {
     _enable_nss_mdns
     systemctl daemon-reload >/dev/null 2>&1 || true
+    _migrate_gpu_service
     local s
     for s in ananicy-cpp systemd-resolved; do
         if systemctl is-active --quiet "$s" 2>/dev/null; then
@@ -51,9 +68,9 @@ post_upgrade() {
 }
 
 pre_remove() {
-    # put AMD GPUs back to automatic clocks before the files disappear
-    systemctl stop lunar-amdgpu-performance.service >/dev/null 2>&1 || true
-    systemctl disable lunar-amdgpu-performance.service lunar-ppd-performance.service >/dev/null 2>&1 || true
+    # put the GPUs back to automatic clocks before the files disappear
+    systemctl stop lunar-gpu-performance.service >/dev/null 2>&1 || true
+    systemctl disable lunar-gpu-performance.service lunar-ppd-performance.service >/dev/null 2>&1 || true
 }
 
 post_remove() {

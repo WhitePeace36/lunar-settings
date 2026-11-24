@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+# gpu-performance - Lunar performance settings for AMD and NVIDIA GPUs
+#
+#   apply [cardN] : put the GPU(s) into their fastest steady state
+#   reset [cardN] : back to driver defaults
+#
+# Without cardN all supported cards are handled. The udev rule starts
+# lunar-gpu-performance@cardN.service for every card that appears, so cards
+# bound after lunar-gpu-performance.service ran are covered too.
+#
+# Dedicated cards in desktops get the full settings below. Integrated GPUs
+# (AMD APUs, e.g. in mini PCs) share the CPU's power budget; holding them at
+# full clock would take boost headroom from the CPU, so they only get
+# performance level manual (nothing pinned) with the 3D_FULL_SCREEN power
+# profile. In laptops every GPU is left alone: it has to be able to save
+# power.
+#
+# AMD (amdgpu), dedicated cards in desktops:
+#   power limit -> the card's maximum (power1_cap_max)
+#   power profile -> 3D_FULL_SCREEN
+#   performance level -> manual, memory clock pinned to its top state;
+#   cards without clock tables or power profiles (GCN 1, on the legacy
+#   si_dpm code) stay on the driver defaults: their only option, "high",
+#   would pin the core clock to its maximum too
+#   Raising the power limit within the card's own range needs no boot
+#   option. The memory clock stays at maximum even at idle; that costs some
+#   idle power (tens of watts on big cards) in exchange for no memory
+#   reclocking stutter.
+#
+# NVIDIA (proprietary driver, through nvidia-smi), desktops:
+#   power limit -> its maximum (gpu.power.max_limit, power.max_limit on
+#   older drivers), memory clock locked to its maximum (clocks.max.memory)
+#   nouveau cannot reclock and is left alone.
+#
+# Intel GPUs are not touched.
+#
+# "systemctl disable lunar-gpu-performance.service" turns all of it off
+# (also the per-card units and the resume hook). Settings in
+# /etc/lunar/gpu-performance.conf:
+#   LUNAR_GPU_SKIP_AMD=1     leave AMD cards alone
+#   LUNAR_GPU_SKIP_NVIDIA=1  leave NVIDIA cards alone
+#   LUNAR_GPU_APU_PROFILE=0  leave AMD APUs alone. By default an APU in a
+#                            desktop or mini PC gets performance level
+#                            manual and the power profile 3D_FULL_SCREEN:
+#                            no clocks pinned, no power limit change.
+#                            APUs in laptops are always left alone.
+# (LUNAR_AMDGPU_SKIP=1 in /etc/lunar/amdgpu-performance.conf still works.)
+
+set -u
+
+LUNAR_GPU_SKIP_AMD=0
+LUNAR_GPU_SKIP_NVIDIA=0
+LUNAR_GPU_APU_PROFILE=1
+LUNAR_AMDGPU_SKIP=0
+CONF_DIR="${LUNAR_GPU_CONF_DIR:-/etc/lunar}"   # tests point this elsewhere
+for conf in "$CONF_DIR"/amdgpu-performance.conf "$CONF_DIR"/gpu-performance.conf; do
+    # shellcheck source=/dev/null
+    [ -r "$conf" ] && . "$conf"
+done
+[ "$LUNAR_AMDGPU_SKIP" = 1 ] && LUNAR_GPU_SKIP_AMD=1
+
+SYSFS="${LUNAR_GPU_SYSFS:-/sys}"   # tests point this at a fake tree
+
+log() { echo "lunar-gpu: $*"; }
+
+write() {  # write <value> <file>
+    local value="$1" file="$2"
+    [ -w "$file" ] || { log "skip ${file#"$SYSFS"/} (not writable)"; return 1; }
+    if ! printf '%s\n' "$value" > "$file" 2>/dev/null; then
+        log "failed to write '$value' to ${file#"$SYSFS"/}"
+        return 1
+    fi
+}
+
+# A system battery (not a mouse or headset battery) means a laptop.
+is_laptop() {
+    local s
+    for s in "$SYSFS"/class/power_supply/*; do
+        [ "$(cat "$s/type" 2>/dev/null)" = Battery ] || continue
+        [ "$(cat "$s/scope" 2>/dev/null)" = Device ] && continue
+        return 0
+    done
+    return 1
+}
+
+# gpu_cards [cardN] -> one line per card: "<driver> <card dir> <device dir>"
+gpu_cards() {
+    local card drv pattern='card[0-9]*'
+    if [ -n "${1:-}" ]; then
+        [[ "$1" =~ ^card[0-9]+$ ]] || { log "not a card name: $1" >&2; return 0; }
+        pattern="$1"
+    fi
+    for card in "$SYSFS"/class/drm/$pattern; do
+        [[ "${card##*/}" =~ ^card[0-9]+$ ]] || continue   # not card1-DP-1 etc.
+        [ -e "$card/device/driver" ] || continue
+        drv="$(basename "$(readlink -f "$card/device/driver")")"
+        echo "$drv $card $(readlink -f "$card/device")"
+    done
+}
+
+# ---------------------------------------------------------------- AMD
+
+amd_hwmon() {
+    local h
+    for h in "$1"/hwmon/hwmon*; do
+        [ -e "$h/power1_cap" ] && { echo "$h"; return 0; }
+    done
+    return 1
+}
+
+# The northbridge voltage (hwmon in1, "vddnb") is shown on APUs only; the
+# driver hides it on every dedicated card (amdgpu_pm.c).
+amd_is_apu() {
+    local h
+    for h in "$1"/hwmon/hwmon*; do
+        [ -e "$h/in1_input" ] && return 0
+    done
+    return 1
+}
+
+amd_skip_reason() {  # amd_skip_reason <device dir>
+    if amd_is_apu "$1"; then
+        echo "integrated GPU (shares the CPU's power budget)"
+    elif is_laptop; then
+        echo "laptop (the GPU has to be able to power down)"
+    else
+        return 1
+    fi
+}
+
+# amd_profile_index <device dir> <profile name> -> its number, if the card has it
+amd_profile_index() {
+    sed -nE "s/^[[:space:]]*([0-9]+)[[:space:]]+$2.*/\\1/p" \
+        "$1/pp_power_profile_mode" 2>/dev/null | head -n1
+}
+
+# The power profile must be written while the level is "manual": the
+# powerplay code (Polaris, Vega, Raven APUs) rejects it otherwise ("power
+# profile setting is for manual dpm mode only"); swsmu (Navi and newer,
+# Renoir and newer APUs) takes it either way. "manual" alone pins nothing:
+# the clocks keep scaling over their whole range.
+amd_profile() {  # amd_profile <device dir> <profile name>
+    local idx
+    idx="$(amd_profile_index "$1" "$2")"
+    [ -n "$idx" ] && write "$idx" "$1/pp_power_profile_mode"
+}
+
+# APUs in desktops and mini PCs get performance level manual and the power
+# profile, no pinned clocks (LUNAR_GPU_APU_PROFILE=0 turns that off); APUs
+# in laptops are left alone.
+apu_profile_only() {
+    amd_is_apu "$1" && [ "$LUNAR_GPU_APU_PROFILE" = 1 ] && ! is_laptop
+}
+
+amd_apply() {
+    local dev="$1" level="$1/power_dpm_force_performance_level" hwmon max top why
+    if apu_profile_only "$dev"; then
+        if [ -z "$(amd_profile_index "$dev" 3D_FULL_SCREEN)" ]; then
+            log "  integrated GPU: no power profiles, left alone"
+        elif write manual "$level"; then
+            if amd_profile "$dev" 3D_FULL_SCREEN; then
+                log "  integrated GPU: performance level manual, power profile 3D_FULL_SCREEN (clocks not pinned)"
+            else
+                write auto "$level"   # manual without the profile gains nothing
+            fi
+        fi
+        return 0
+    fi
+    if why="$(amd_skip_reason "$dev")"; then
+        log "  left alone: $why"
+        return 0
+    fi
+
+    if hwmon="$(amd_hwmon "$dev")" && [ -r "$hwmon/power1_cap_max" ]; then
+        max="$(cat "$hwmon/power1_cap_max")"
+        [ "${max:-0}" -gt 0 ] && write "$max" "$hwmon/power1_cap" \
+            && log "  power limit $((max / 1000000)) W"
+    fi
+
+    # Legacy dpm (GCN 1 on si_dpm) lists pp_dpm_mclk, but reading it fails
+    # (ENOENT); such cards have no clock tables, power profiles or power
+    # limit. Their only forced level, "high", pins core and memory clock to
+    # the top state even at idle, and how eagerly the clocks rise is fixed in
+    # the SMC firmware. They stay on "auto", which already boosts to the top
+    # state under load.
+    top="$(sed -nE 's/^([0-9]+):.*/\1/p' "$dev/pp_dpm_mclk" 2>/dev/null | sort -n | tail -n1)"
+    if [ -n "$top" ]; then
+        write manual "$level" || return 0
+        amd_profile "$dev" 3D_FULL_SCREEN && log "  power profile 3D_FULL_SCREEN"
+        write "$top" "$dev/pp_dpm_mclk" && log "  memory clock pinned to state $top"
+    else
+        log "  no clock tables or power profiles (GCN 1): left on driver defaults"
+    fi
+}
+
+amd_reset() {
+    local dev="$1" level="$1/power_dpm_force_performance_level" hwmon def
+    if apu_profile_only "$dev"; then
+        amd_profile "$dev" BOOTUP_DEFAULT   # while still manual, see amd_profile
+        write auto "$level"
+        return 0
+    fi
+    amd_skip_reason "$dev" >/dev/null && return 0
+    amd_profile "$dev" BOOTUP_DEFAULT       # while still manual, see amd_profile
+    write auto "$level"
+    if hwmon="$(amd_hwmon "$dev")" && [ -r "$hwmon/power1_cap_default" ]; then
+        def="$(cat "$hwmon/power1_cap_default")"
+        [ "${def:-0}" -gt 0 ] && write "$def" "$hwmon/power1_cap"
+    fi
+    return 0
+}
+
+# ------------------------------------------------------------- NVIDIA
+
+# PCI bus id as in sysfs (0000:01:00.0): NVML accepts "domain:bus:device.function
+# in format x:x:x.x" (all hex) for nvidia-smi -i.
+nvidia_id() { echo "${1##*/}"; }
+
+# nvidia_query <device dir> <field>... -> the first field that gives a number
+# (whole part only). The power fields were renamed: gpu.power.max_limit in
+# current drivers (620), power.max_limit in older ones (580xx).
+nvidia_query() {
+    local dev="$1" field v
+    shift
+    for field in "$@"; do
+        v="$(nvidia-smi -i "$(nvidia_id "$dev")" --query-gpu="$field" \
+             --format=csv,noheader,nounits 2>/dev/null | tr -d ' ')"
+        v="${v%%.*}"
+        [[ "$v" =~ ^[0-9]+$ ]] && { echo "$v"; return 0; }
+    done
+    return 1
+}
+
+nvidia_ready() {
+    if is_laptop; then
+        log "  left alone: laptop (the dGPU has to be able to power down)"
+        return 1
+    fi
+    command -v nvidia-smi >/dev/null || { log "  nvidia-smi not found"; return 1; }
+}
+
+nvidia_apply() {
+    local dev="$1" id pl mem
+    nvidia_ready || return 0
+    id="$(nvidia_id "$dev")"
+
+    pl="$(nvidia_query "$dev" gpu.power.max_limit power.max_limit)"
+    if [ -n "$pl" ] && [ "$pl" -gt 0 ]; then
+        if nvidia-smi -i "$id" -pl "$pl" >/dev/null 2>&1; then
+            log "  power limit $pl W"
+        else
+            log "  power limit not adjustable"
+        fi
+    fi
+
+    mem="$(nvidia_query "$dev" clocks.max.memory)"
+    if [ -n "$mem" ]; then
+        if nvidia-smi -i "$id" -lmc "$mem,$mem" >/dev/null 2>&1; then
+            log "  memory clock locked to $mem MHz"
+        else
+            log "  memory clock lock not supported"
+        fi
+    fi
+}
+
+nvidia_reset() {
+    local dev="$1" id pl
+    nvidia_ready >/dev/null || return 0
+    id="$(nvidia_id "$dev")"
+    nvidia-smi -i "$id" -rmc >/dev/null 2>&1
+    pl="$(nvidia_query "$dev" gpu.power.default_limit power.default_limit)"
+    if [ -n "$pl" ] && [ "$pl" -gt 0 ]; then
+        nvidia-smi -i "$id" -pl "$pl" >/dev/null 2>&1
+    fi
+    return 0
+}
+
+# --------------------------------------------------------------- main
+
+main() {
+    local action="${1:-apply}" card="${2:-}" drv cdir dev vendor skip found=0
+    case "$action" in
+        apply|reset) ;;
+        *) echo "usage: $0 apply|reset [cardN]" >&2; exit 2 ;;
+    esac
+    while read -r drv cdir dev; do
+        case "$drv" in
+            amdgpu)  vendor=amd    skip="$LUNAR_GPU_SKIP_AMD" ;;
+            nvidia)  vendor=nvidia skip="$LUNAR_GPU_SKIP_NVIDIA" ;;
+            *) continue ;;
+        esac
+        found=1
+        if [ "$action" = apply ] && [ "$skip" = 1 ]; then
+            log "${dev##*/} ($drv): disabled in /etc/lunar/gpu-performance.conf"
+            continue
+        fi
+        log "$action ${dev##*/} ($drv)"
+        case "$vendor/$action" in
+            amd/apply)    amd_apply "$dev" ;;
+            amd/reset)    amd_reset "$dev" ;;
+            nvidia/apply) nvidia_apply "$dev" ;;
+            nvidia/reset) nvidia_reset "$dev" ;;
+        esac
+    done < <(gpu_cards "$card")
+    [ "$found" = 1 ] || log "no AMD or NVIDIA card found${card:+ for $card}"
+    exit 0
+}
+
+main "$@"

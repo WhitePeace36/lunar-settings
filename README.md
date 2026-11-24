@@ -17,8 +17,8 @@ on Arch Linux with the linux-lunar kernel), as one package.
 | Environment variables | `usr/lib/environment.d/60-lunar.conf`, `etc/profile.d/lunar-env.sh` |
 | Limits | `etc/security/limits.d/90-lunar.conf`, `usr/lib/systemd/{system,user}.conf.d/` |
 | zram | `usr/lib/systemd/zram-generator.conf` |
-| udev: I/O scheduler, SATA/HDD power, AMD GPU | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules`, `70-lunar-disk-performance.rules`, `90-lunar-amdgpu-performance.rules` |
-| AMD GPU max power limit + fixed VRAM clock | `usr/lib/lunar/amdgpu-performance`, `lunar-amdgpu-performance.service` |
+| udev: I/O scheduler, SATA/HDD power, GPU | `usr/lib/udev/rules.d/60-lunar-ioscheduler.rules`, `70-lunar-disk-performance.rules`, `90-lunar-gpu-performance.rules` |
+| GPU performance (desktops and mini PCs; laptops untouched): dedicated AMD cards max power limit + 3D_FULL_SCREEN + fixed VRAM clock (GCN 1: driver defaults), AMD APUs level manual + 3D_FULL_SCREEN power profile (no pinned clocks), NVIDIA max power limit + locked VRAM clock | `usr/lib/lunar/gpu-performance`, `lunar-gpu-performance.service`, `lunar-gpu-performance@.service` (per card, from udev), `/etc/lunar/gpu-performance.conf` to opt out |
 | Kernel modules | `usr/lib/modprobe.d/`, `usr/lib/modules-load.d/` |
 | Boot entries, kernel command line tools | `usr/bin/lunar-sdboot-update`, `usr/bin/lunar-update-cmdline`, `usr/share/libalpm/hooks/` |
 | GPU driver selection | `usr/bin/lunar-gpu-setup` |

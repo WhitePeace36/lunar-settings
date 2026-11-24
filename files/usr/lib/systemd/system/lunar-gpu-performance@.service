@@ -1,0 +1,14 @@
+[Unit]
+Description=Lunar: GPU performance settings for %I
+Documentation=file:///usr/lib/lunar/gpu-performance
+# Started by 90-lunar-gpu-performance.rules for every AMD or NVIDIA card
+# that appears, also when the driver binds after
+# lunar-gpu-performance.service has run. No RemainAfterExit, so a card that
+# is added again (driver rebind) starts it again. "systemctl disable
+# lunar-gpu-performance.service" turns this off too (ExecCondition).
+After=lunar-gpu-performance.service
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/systemctl -q is-enabled lunar-gpu-performance.service
+ExecStart=/usr/lib/lunar/gpu-performance apply %i

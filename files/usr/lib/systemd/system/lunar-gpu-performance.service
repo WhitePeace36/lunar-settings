@@ -1,0 +1,13 @@
+[Unit]
+Description=Lunar: GPU performance settings (AMD, NVIDIA)
+Documentation=file:///usr/lib/lunar/gpu-performance
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/lunar/gpu-performance apply
+ExecStop=/usr/lib/lunar/gpu-performance reset
+
+[Install]
+WantedBy=multi-user.target

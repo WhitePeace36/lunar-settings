@@ -2,7 +2,7 @@
 #
 # All of Lunar's system settings: sysctl, transparent hugepages and other
 # tmpfiles, zram, limits, kernel command line, udev rules (I/O schedulers,
-# disks, AMD GPU), mDNS, environment, the systemd-boot entry tools and
+# disks, GPU performance), mDNS, environment, the systemd-boot entry tools and
 # lunar-gpu-setup.
 #
 # files/ mirrors the filesystem: files/usr/lib/sysctl.d/70-lunar.conf is
@@ -16,7 +16,7 @@
 #   scripts/build-packages.sh lunar-settings && scripts/publish.sh
 
 pkgname=lunar-settings
-pkgver=2.0.9
+pkgver=2.0.10
 pkgrel=1
 pkgdesc='Lunar - system settings (sysctl, THP, zram, limits, kernel parameters, mDNS, boot entries, GPU setup)'
 arch=('any')
@@ -50,6 +50,6 @@ install=lunar-settings.install
 package() {
   cp -a --no-preserve=ownership "$startdir/files/." "$pkgdir/"
   chmod 755 "$pkgdir/usr/bin/"* "$pkgdir/etc/profile.d/"*.sh \
-            "$pkgdir/usr/lib/lunar/amdgpu-performance" \
-            "$pkgdir/usr/lib/systemd/system-sleep/lunar-amdgpu-performance"
+            "$pkgdir/usr/lib/lunar/gpu-performance" \
+            "$pkgdir/usr/lib/systemd/system-sleep/lunar-gpu-performance"
 }

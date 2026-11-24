@@ -1,0 +1,11 @@
+#!/bin/sh
+# Re-apply the GPU performance settings after resume; the driver may fall
+# back to automatic clocks when the card is powered back up.
+case "$1/$2" in
+    post/*)
+        if systemctl -q is-active lunar-gpu-performance.service 2>/dev/null; then
+            /usr/lib/lunar/gpu-performance apply
+        fi
+        ;;
+esac
+exit 0

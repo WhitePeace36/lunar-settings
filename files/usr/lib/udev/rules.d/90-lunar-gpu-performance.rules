@@ -1,0 +1,9 @@
+# Apply the GPU performance settings as soon as a card appears.
+# A per-card instance: lunar-gpu-performance.service may already have run
+# (it is pulled in by multi-user.target, often before the GPU driver has
+# finished probing), and wanting an already active unit does not start it
+# again. DEVTYPE drm_minor: the card itself, not its connectors
+# (card1-DP-1 also matches card[0-9]*).
+ACTION=="add", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", ENV{DEVTYPE}=="drm_minor", \
+    DRIVERS=="amdgpu|nvidia", \
+    TAG+="systemd", ENV{SYSTEMD_WANTS}+="lunar-gpu-performance@%k.service"
